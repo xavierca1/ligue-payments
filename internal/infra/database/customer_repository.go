@@ -3,10 +3,8 @@ package database
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log"
 
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/xavierca1/ligue-payments/internal/entity"
 )
 
@@ -38,12 +36,12 @@ func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) err
 
 	if err != nil {
 
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == "23505" {
-				return entity.ErrEmailAlreadyExists
-			}
-		}
+		// var pgErr *pgconn.PgError
+		// if errors.As(err, &pgErr) {
+		// 	if pgErr.Code == "23505" {
+		// 		return entity.ErrEmailAlreadyExists
+		// 	}
+		// }
 
 		log.Printf("Erro crítico no banco: %v", err)
 		return err

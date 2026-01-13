@@ -3,66 +3,84 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
-	"github.com/joho/godotenv"
+	"github.com/go-chi/chi/v5"
+	_ "github.com/lib/pq" // Driver do Postgres
 
+	"github.com/joho/godotenv"
 	"github.com/xavierca1/ligue-payments/internal/infra/database"
+	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
+	"github.com/xavierca1/ligue-payments/internal/infra/integration/temsaude"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
 func main() {
 	err := godotenv.Load()
+
 	if err != nil {
-		log.Println("Aviso: Arquivo .env não encontrado, usando variáveis do sistema")
+		log.Println("Arquivo env não encontrado ")
 	}
 
-	connStr := os.Getenv("DATABASE_URL")
-	if connStr == "" {
-		log.Fatal("ERRO: A variável DATABASE_URL é obrigatória!")
+	dbURL := os.Getenv("DATABASE_URL")
+	asaasKey := os.Getenv("ASAAS_API_KEY")
+	asaasURL := os.Getenv("ASAAS_URL")
+	temUrl := os.Getenv("TEM_SAUDE_URL")
+	temToken := os.Getenv("TEM_SAUDE_TOKEN")
+	temAdapter := temsaude.NewClient(temUrl, temToken)
+
+	if dbURL == "" {
+		println("Erro em buscar o database no .env")
+	}
+	if dbURL == "" || asaasKey == "" || asaasURL == "" {
+		log.Fatal("ERRO: Configure DB_URL, ASAAS_API_KEY e ASAAS_URL no .env")
 	}
 
-	db, err := sql.Open("pgx", connStr)
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatalf("Erro ao abrir conexão: %v", err)
+		log.Fatal("Erro ao abrir conexão com banco:", err)
 	}
 	defer db.Close()
 
 	if err := db.Ping(); err != nil {
-		log.Fatalf("❌ Erro fatal: Não foi possível conectar ao banco: %v", err)
+		log.Fatal("Erro ao conectar no banco (Ping):", err)
 	}
-	fmt.Println("✅ Conectado ao Supabase com sucesso!")
+	log.Println("Banco de Dados Conectado com Sucesso!")
 
-	repo := database.NewCustomerRepository(db)
+	customerRepo := database.NewCustomerRepository(db)
+	planRepo := database.NewPlanRepository(db)
 
-	uc := usecase.NewCreateCustomerUseCase(repo)
+	gateway := asaas.NewClient(asaasKey, asaasURL)
 
-	webHandler := NewWebHandler(uc)
+	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo, planRepo, gateway, temAdapter)
+	r := chi.NewRouter()
 
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		if err := db.Ping(); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+	r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {
+		var input usecase.CreateCustomerInput
+
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "JSON inválido: "+err.Error(), http.StatusBadRequest)
 			return
 		}
+
+		output, err := createCustomerUC.Execute(r.Context(), input)
+		if err != nil {
+			log.Printf("Erro no checkout: %v", err)
+
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "db": "connected"})
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(output)
 	})
 
-	http.HandleFunc("/customers", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Método não permitido (use POST)", http.StatusMethodNotAllowed)
-			return
-		}
-		webHandler.HandleCreateCustomer(w, r)
-	})
-
-	fmt.Println("🔥 Servidor rodando na porta 8080...")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	port := ":8080"
+	log.Printf(" Server CorePay rodando na porta %s", port)
+	if err := http.ListenAndServe(port, r); err != nil {
 		log.Fatal(err)
 	}
 }

@@ -5,35 +5,79 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/paemuri/brdoc"
+	// IMPORTANTE: NÃO adicione imports de usecase ou infra aqui!
 )
 
-type Customer struct {
-	ID        string
-	Name      string
-	Email     string
-	CPF       string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+// Value Object: Address
+type Address struct {
+	Street     string `json:"street"`
+	Number     string `json:"number"`
+	Complement string `json:"complement"`
+	District   string `json:"district"`
+	City       string `json:"city"`
+	State      string `json:"state"`
+	ZipCode    string `json:"zip_code"`
 }
 
-var (
-	ErrEmailAlreadyExists = errors.New("email já cadastrado para este produto")
-	ErrInvalidCPF         = errors.New("cpf inválido")
-)
+// Entidade: Customer
+type Customer struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	CPF   string `json:"cpf"`
 
-func NewCustomer(name, email, cpf string) (*Customer, error) {
+	// Novos Campos Obrigatórios
+	Phone     string  `json:"phone"`
+	BirthDate string  `json:"birth_date"`
+	Gender    int     `json:"gender"`
+	Address   Address `json:"address"`
 
-	if !brdoc.IsCPF(cpf) {
-		return nil, ErrInvalidCPF
-	}
+	// IDs externos
+	GatewayID      string `json:"gateway_id"`
+	SubscriptionID string `json:"subscription_id"`
+	ProviderID     string `json:"provider_id"`
 
-	return &Customer{
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"created_at"`
+}
+
+// Factory
+func NewCustomer(name, email, cpf, phone, birthDate string, gender int, address Address) (*Customer, error) {
+	customer := &Customer{
 		ID:        uuid.New().String(),
 		Name:      name,
 		Email:     email,
 		CPF:       cpf,
+		Phone:     phone,
+		BirthDate: birthDate,
+		Gender:    gender,
+		Address:   address,
+
+		Status:    "PENDING",
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-	}, nil
+	}
+
+	if err := customer.Validate(); err != nil {
+		return nil, err
+	}
+
+	return customer, nil
+}
+
+func (c *Customer) Validate() error {
+	if c.Name == "" {
+		return errors.New("name is required")
+	}
+	if c.Email == "" {
+		return errors.New("email is required")
+	}
+	if c.CPF == "" {
+		return errors.New("cpf is required")
+	}
+	if c.Address.Street == "" {
+		return errors.New("address street is required")
+	}
+	return nil
 }
