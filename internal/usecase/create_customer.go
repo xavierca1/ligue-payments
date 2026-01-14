@@ -135,29 +135,22 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		return nil, err
 	}
 
-	// Vincula os IDs externos na entidade
 	customer.GatewayID = asaasCustomerID
 
-	// Converte CodOnix do plano (string "7875") para int e salva no cliente
 	customer.OnixCode = plan.ProviderPlanCode
-	// ---------------------------------------------------------
-	// 4. Integração ASAAS: Assinatura (Usando o novo DTO)
-	// ---------------------------------------------------------
-	// O banco guarda centavos (ex: 3990), Asaas quer float (39.90)
+
 	amount := float64(plan.PriceCents) / 100.0
 
 	subID, status, err := uc.Gateway.Subscribe(asaas.SubscribeInput{
 		CustomerID: asaasCustomerID,
 		Price:      amount,
 
-		// Dados do Cartão
 		CardHolderName: input.CardHolder,
 		CardNumber:     input.CardNumber,
 		CardMonth:      input.CardMonth,
 		CardYear:       input.CardYear,
 		CardCCV:        input.CardCVV,
 
-		// Dados do Titular (Anti-fraude - O que consertamos antes)
 		HolderEmail:      input.Email,
 		HolderCpfCnpj:    input.CPF,
 		HolderPostalCode: input.ZipCode,

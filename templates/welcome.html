@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bem-vindo à Ligue!</title>
+    <style>
+        /* CSS de Reset e fontes básicas */
+        body { margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        /* O hover só funciona em alguns clientes web, então mantemos aqui */
+        .btn:hover { background-color: #3FC69D !important; }
+    </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #f4f4f4;">
+        <tr>
+            <td align="center" style="padding: 20px 0;">
+                
+                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 600px;">
+                    
+                    <tr>
+                        <td align="center" style="background-color: #3FC69D; padding: 30px 20px;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Bem-vindo ao Ligue Medicina! </h1>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="padding: 40px 30px; color: #333333; line-height: 1.6;">
+                            
+                            <div style="font-size: 20px; font-weight: bold; color: #3289CA; margin-bottom: 20px;">
+                                Olá, {{.Name}}!
+                            </div>
+
+                            <p style="margin-bottom: 20px;">
+                                Estamos muito felizes em ter você conosco! Seu cadastro foi confirmado e sua assinatura do plano <strong>{{.ProductName}}</strong> já está ativa.
+                            </p>
+
+                            <div style="background-color: #e9f5ff; border-left: 4px solid #3289CA; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                                <p style="margin: 0;"><strong>O que acontece agora?</strong><br>
+                                Você já pode começar a utilizar os benefícios da nossa rede credenciada e descontos exclusivos.</p>
+                            </div>
+
+                            <p style="margin-bottom: 20px;">
+                                Preparamos um <strong>Kit de Boas-Vindas</strong> digital para você. Nele você encontra sua carteirinha provisória e o manual de uso.
+                            </p>
+
+                            <div style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
+                                <a href="{{.PDFLink}}" target="_blank" class="btn" style="background-color: #42D393; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);">
+                                    📥 Baixar Meu Kit de Boas-Vindas
+                                </a>
+                            </div>
+
+                            <p style="margin-bottom: 10px;">
+                                Se tiver qualquer dúvida ou precisar de ajuda, basta responder a este e-mail ou entrar em contato pelo nosso WhatsApp.
+                            </p>
+                            
+                            <p style="margin-top: 30px;">
+                                Um abraço,<br>
+                                <strong>Equipe Ligue & Grupo Cuidarte</strong>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td align="center" style="background-color: #eeeeee; padding: 20px; font-size: 12px; color: #777777; border-top: 1px solid #dddddd;">
+                            <p style="margin: 5px 0;">Este é um e-mail automático, por favor não responda diretamente se não for necessário.</p>
+                            <p style="margin: 5px 0;">&copy; 2026 Grupo Cuidarte. Todos os direitos reservados.</p>
+                        </td>
+                    </tr>
+                </table>
+
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
