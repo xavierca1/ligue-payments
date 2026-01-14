@@ -9,148 +9,144 @@ import (
 	"time"
 )
 
-type CreateCustomerRequest struct {
-	Name    string `json:"name"`
-	Email   string `json:"email"`
-	CpfCnpj string `json:"cpfCnpj"`
-}
-
-type CreateCustomerResponse struct {
-	ID string `json:"id"` // Ex: "cus_000005105952"
-}
-
-type CreditCard struct {
-	HolderName  string `json:"holderName"`
-	Number      string `json:"number"`
-	ExpiryMonth string `json:"expiryMonth"`
-	ExpiryYear  string `json:"expiryYear"`
-	CCV         string `json:"ccv"`
-}
-
-type CreateSubscriptionRequest struct {
-	Customer    string     `json:"customer"`
-	BillingType string     `json:"billingType"` // "CREDIT_CARD"
-	Value       float64    `json:"value"`
-	NextDueDate string     `json:"nextDueDate"` // "YYYY-MM-DD"
-	Cycle       string     `json:"cycle"`       // "MONTHLY"
-	CreditCard  CreditCard `json:"creditCard"`
-	RemoteIp    string     `json:"remoteIp"` // Importante para antifraude
-}
-
-type SubscriptionResponse struct {
-	ID     string `json:"id"`
-	Status string `json:"status"` // "ACTIVE"
-}
-
 type Client struct {
-	apiKey  string
 	baseURL string
+	apiKey  string
 	http    *http.Client
 }
 
 func NewClient(apiKey, baseURL string) *Client {
 	return &Client{
-		apiKey:  apiKey,
 		baseURL: baseURL,
-		http: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+		apiKey:  apiKey,
+		http:    &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (c *Client) CreateCustomer(name, email, cpf string) (string, error) {
+// CreateCustomer: Cria o cliente no Asaas e retorna o ID (cus_xxxx)
+func (c *Client) CreateCustomer(input CreateCustomerInput) (string, error) {
 	url := fmt.Sprintf("%s/customers", c.baseURL)
 
-	payload := CreateCustomerRequest{
-		Name:    name,
-		Email:   email,
-		CpfCnpj: cpf,
+	// 1. Converte DTO -> Request do Asaas
+	payload := createCustomerRequest{
+		Name:                 input.Name,
+		Email:                input.Email,
+		CpfCnpj:              input.CpfCnpj,
+		Phone:                input.Phone,
+		MobilePhone:          input.MobilePhone,
+		PostalCode:           input.PostalCode,
+		AddressNumber:        input.AddressNumber,
+		NotificationDisabled: true, // Para não enviar email automático do Asaas agora
 	}
 
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("erro ao fazer marshal do payload: %w", err)
+		return "", fmt.Errorf("erro ao marshal customer: %w", err)
 	}
 
+	// 2. Cria Request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
-
 	c.setHeaders(req)
 
+	// 3. Envia
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("erro de conexão com asaas: %w", err)
+		return "", fmt.Errorf("erro request asaas: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 4. Trata Erro
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("erro na api asaas (status %d): %s", resp.StatusCode, string(body))
+		fmt.Printf("❌ ERRO CRIAR CLIENTE ASAAS: %s\n", string(body))
+		return "", fmt.Errorf("erro criar cliente asaas (status %d)", resp.StatusCode)
 	}
 
-	var response CreateCustomerResponse
+	// 5. Decodifica
+	var response customerResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("erro ao decodificar resposta: %w", err)
+		return "", fmt.Errorf("erro decode asaas: %w", err)
 	}
 
 	return response.ID, nil
 }
 
-func (c *Client) Subscribe(customerID string, amount float64, holder, number, month, year, ccv string) (string, string, error) {
+// Subscribe: Recebe o DTO limpo, converte pro formato Asaas e envia
+func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 	url := fmt.Sprintf("%s/subscriptions", c.baseURL)
 	today := time.Now().Format("2006-01-02")
 
-	cc := CreditCard{
-		HolderName:  holder,
-		Number:      number,
-		ExpiryMonth: month,
-		ExpiryYear:  year,
-		CCV:         ccv,
-	}
-
-	payload := CreateSubscriptionRequest{
-		Customer:    customerID,
+	// 1. De-Para: Converte seu DTO (SubscribeInput) para o JSON do Asaas
+	payload := createSubscriptionRequest{
+		Customer:    input.CustomerID,
 		BillingType: "CREDIT_CARD",
-		Value:       amount,
+		Value:       input.Price,
 		NextDueDate: today,
 		Cycle:       "MONTHLY",
-		CreditCard:  cc,
-		RemoteIp:    "127.0.0.1",
+		Description: "Assinatura Ligue Saúde", // Descrição na fatura
+
+		CreditCard: creditCard{
+			HolderName:  input.CardHolderName,
+			Number:      input.CardNumber,
+			ExpiryMonth: input.CardMonth,
+			ExpiryYear:  input.CardYear,
+			CCV:         input.CardCCV,
+		},
+
+		CreditCardHolderInfo: creditCardHolderInfo{
+			Name:          input.CardHolderName,
+			Email:         input.HolderEmail,
+			CpfCnpj:       input.HolderCpfCnpj,
+			PostalCode:    input.HolderPostalCode,
+			AddressNumber: input.HolderAddressNum,
+			Phone:         input.HolderPhone,
+			MobilePhone:   input.HolderPhone,
+		},
 	}
 
+	// 2. Prepara o JSON
 	jsonBody, err := json.Marshal(payload)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("erro ao gerar json: %w", err)
 	}
 
+	// 3. Cria Request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", "", err
 	}
 	c.setHeaders(req)
 
+	// 4. Envia
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("erro na conexão com asaas: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 5. Trata Erros da API (400, 401, 500)
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
-		return "", "", fmt.Errorf("erro asaas (status %d): %s", resp.StatusCode, string(body))
+		// Log para ajudar no debug
+		fmt.Printf("❌ ERRO API ASAAS (Status %d): %s\n", resp.StatusCode, string(body))
+		return "", "", fmt.Errorf("api asaas rejeitou (status %d)", resp.StatusCode)
 	}
 
-	var response SubscriptionResponse
+	// 6. Decodifica Sucesso
+	var response subscriptionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("erro ao ler resposta asaas: %w", err)
 	}
 
 	return response.ID, response.Status, nil
 }
 
+// setHeaders centraliza os headers obrigatórios
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("access_token", c.apiKey)
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "LiguePayments/1.0")
 }

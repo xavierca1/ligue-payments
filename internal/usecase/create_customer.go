@@ -2,11 +2,11 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
+	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 )
 
 type CreateCustomerInput struct {
@@ -27,7 +27,7 @@ type CreateCustomerInput struct {
 	City       string `json:"city"`
 	State      string `json:"state"`
 	ZipCode    string `json:"zip_code"`
-
+	OnixCode   string `json:"onix_code"`
 	CardHolder string `json:"card_holder"`
 	CardNumber string `json:"card_number"`
 	CardMonth  string `json:"card_month"`
@@ -52,8 +52,9 @@ type PlanRepositoryInterface interface {
 }
 
 type PaymentGateway interface {
-	CreateCustomer(name, email, cpf string) (string, error)
-	Subscribe(customerID string, amount float64, holder, number, month, year, ccv string) (string, string, error)
+	CreateCustomer(input asaas.CreateCustomerInput) (string, error)
+
+	Subscribe(input asaas.SubscribeInput) (string, string, error)
 }
 
 type CreateCustomerUseCase struct {
@@ -79,9 +80,37 @@ func NewCreateCustomerUseCase(
 }
 
 func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustomerInput) (*CreateCustomerOutput, error) {
-	// 1. Conversão e Criação da Entidade
+	// 1. Conversão de Tipos Básicos
+
+	fmt.Printf("🔍 DEBUG CPF CHEGANDO: [%s]\n", input.CPF)
 	genderInt, _ := strconv.Atoi(input.Gender)
 
+	// Busca o plano no banco para saber o preço e o CodOnix
+	plan, err := uc.PlanRepo.FindByID(ctx, input.PlanID)
+	if err != nil {
+		return nil, fmt.Errorf("plano inválido ou não encontrado: %w", err)
+	}
+
+	// ---------------------------------------------------------
+	// 2. Integração ASAAS: Criar Cliente (Usando o novo DTO)
+	// ---------------------------------------------------------
+	// AQUI ESTAVA O ERRO: Use uc.Gateway, não uc.AsaasGateway
+	asaasCustomerID, err := uc.Gateway.CreateCustomer(asaas.CreateCustomerInput{
+		Name:          input.Name,
+		Email:         input.Email,
+		CpfCnpj:       input.CPF,
+		Phone:         input.Phone,
+		MobilePhone:   input.Phone,
+		PostalCode:    input.ZipCode,
+		AddressNumber: input.Number,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("erro ao criar cliente no asaas: %w", err)
+	}
+
+	// ---------------------------------------------------------
+	// 3. Criação da Entidade de Domínio (Internal)
+	// ---------------------------------------------------------
 	address := entity.Address{
 		Street:     input.Street,
 		Number:     input.Number,
@@ -96,6 +125,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		input.Name,
 		input.Email,
 		input.CPF,
+		input.OnixCode,
 		input.Phone,
 		input.BirthDate,
 		genderInt,
@@ -104,43 +134,50 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	if err != nil {
 		return nil, err
 	}
-	fmt.Printf("🔍 DEBUG INPUT: ID recebido = [%s]\n", input.PlanID)
 
-	// 2. Busca Plano
-	plan, err := uc.PlanRepo.FindByID(ctx, input.PlanID)
-	if err != nil {
+	// Vincula os IDs externos na entidade
+	customer.GatewayID = asaasCustomerID
 
-		return nil, errors.New("plano inválido ou não encontrado")
-	}
-	// 3. Gateway: Cria Cliente no Asaas
-	gatewayID, err := uc.Gateway.CreateCustomer(customer.Name, customer.Email, customer.CPF)
-	if err != nil {
-		return nil, err
-	}
-	customer.GatewayID = gatewayID
-
-	// 4. Gateway: Assinatura (Cobrança)
+	// Converte CodOnix do plano (string "7875") para int e salva no cliente
+	customer.OnixCode = plan.ProviderPlanCode
+	// ---------------------------------------------------------
+	// 4. Integração ASAAS: Assinatura (Usando o novo DTO)
+	// ---------------------------------------------------------
+	// O banco guarda centavos (ex: 3990), Asaas quer float (39.90)
 	amount := float64(plan.PriceCents) / 100.0
-	subID, status, err := uc.Gateway.Subscribe(
-		gatewayID,
-		amount,
-		input.CardHolder,
-		input.CardNumber,
-		input.CardMonth,
-		input.CardYear,
-		input.CardCVV,
-	)
+
+	subID, status, err := uc.Gateway.Subscribe(asaas.SubscribeInput{
+		CustomerID: asaasCustomerID,
+		Price:      amount,
+
+		// Dados do Cartão
+		CardHolderName: input.CardHolder,
+		CardNumber:     input.CardNumber,
+		CardMonth:      input.CardMonth,
+		CardYear:       input.CardYear,
+		CardCCV:        input.CardCVV,
+
+		// Dados do Titular (Anti-fraude - O que consertamos antes)
+		HolderEmail:      input.Email,
+		HolderCpfCnpj:    input.CPF,
+		HolderPostalCode: input.ZipCode,
+		HolderAddressNum: input.Number,
+		HolderPhone:      input.Phone,
+	})
+
 	if err != nil {
 		return nil, fmt.Errorf("erro no pagamento: %w", err)
 	}
 	customer.SubscriptionID = subID
 
-	// CORREÇÃO 2: Chamada do Provedor de Benefício (Tem Saúde)
-	// Só chegamos aqui se o pagamento passou. Agora tem que provisionar.
+	// ---------------------------------------------------------
+	// 5. Integração TEM SAÚDE: Gerar Carteirinha
+	// ---------------------------------------------------------
+	// Só chegamos aqui se o pagamento passou.
 	providerID, err := uc.BenefitService.RegisterBeneficiary(ctx, customer)
 	if err != nil {
-		// ALERTA CRÍTICO: Pagou mas não levou.
-		// Retornamos o erro para saber, mas o dinheiro já saiu da conta do cliente.
+		// ALERTA CRÍTICO: O cliente pagou no Asaas, mas deu erro na Tem Saúde.
+		// Em produção, isso aqui deveria cair numa fila de "Retentativa" ou "Estorno".
 		return nil, fmt.Errorf("pagamento aprovado (ID %s), mas erro ao gerar carteirinha: %w", subID, err)
 	}
 
@@ -148,10 +185,12 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	customer.ProviderID = providerID
 	customer.Status = status // "ACTIVE"
 
-	// 5. Salvar no Banco
+	// ---------------------------------------------------------
+	// 6. Persistência: Salvar no nosso Banco
+	// ---------------------------------------------------------
 	err = uc.Repo.Create(ctx, customer)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("erro ao salvar venda no banco: %w", err)
 	}
 
 	return &CreateCustomerOutput{

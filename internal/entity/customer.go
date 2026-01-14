@@ -33,17 +33,17 @@ type Customer struct {
 	Address   Address `json:"address"`
 
 	// IDs externos
-	GatewayID      string `json:"gateway_id"`
-	SubscriptionID string `json:"subscription_id"`
-	ProviderID     string `json:"provider_id"`
-
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"created_at"`
+	GatewayID      string    `json:"gateway_id"`
+	SubscriptionID string    `json:"subscription_id"`
+	ProviderID     string    `json:"provider_id"`
+	OnixCode       string    `json:"onix_code"`
+	Status         string    `json:"status"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"created_at"`
 }
 
 // Factory
-func NewCustomer(name, email, cpf, phone, birthDate string, gender int, address Address) (*Customer, error) {
+func NewCustomer(name, email, cpf, onixCode, phone, birthDate string, gender int, address Address) (*Customer, error) {
 	customer := &Customer{
 		ID:        uuid.New().String(),
 		Name:      name,
@@ -53,6 +53,7 @@ func NewCustomer(name, email, cpf, phone, birthDate string, gender int, address 
 		BirthDate: birthDate,
 		Gender:    gender,
 		Address:   address,
+		OnixCode:  onixCode,
 
 		Status:    "PENDING",
 		CreatedAt: time.Now(),
