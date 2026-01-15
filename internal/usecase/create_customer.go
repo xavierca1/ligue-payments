@@ -10,15 +10,14 @@ import (
 )
 
 type CreateCustomerInput struct {
-	// 1. Identificação
 	Name   string `json:"name"`
 	Email  string `json:"email"`
 	CPF    string `json:"cpf"`
 	PlanID string `json:"plan_id"`
 
 	Phone     string `json:"phone"`
-	BirthDate string `json:"birth_date"` // YYYY-MM-DD
-	Gender    string `json:"gender"`     // Recebe string "1" ou "0" do front
+	BirthDate string `json:"birth_date"`
+	Gender    string `json:"gender"`
 
 	Street     string `json:"street"`
 	Number     string `json:"number"`
@@ -40,7 +39,7 @@ type CreateCustomerOutput struct {
 	Name   string `json:"name"`
 	Email  string `json:"email"`
 	Status string `json:"status"`
-	Msg    string `json:"msg"` // Adicionei para feedback visual no Postman
+	Msg    string `json:"msg"`
 }
 
 type CustomerRepositoryInterface interface {
@@ -53,8 +52,15 @@ type PlanRepositoryInterface interface {
 
 type PaymentGateway interface {
 	CreateCustomer(input asaas.CreateCustomerInput) (string, error)
-
 	Subscribe(input asaas.SubscribeInput) (string, string, error)
+}
+
+// ---------------------------------------------------------
+// CORREÇÃO 1: Definindo a interface que faltava
+// ---------------------------------------------------------
+
+type EmailService interface {
+	SendWelcome(to, name, productName, pdfLink string) error
 }
 
 type CreateCustomerUseCase struct {
@@ -62,39 +68,36 @@ type CreateCustomerUseCase struct {
 	PlanRepo       PlanRepositoryInterface
 	Gateway        PaymentGateway
 	BenefitService BenefitProvider
+	EmailService   EmailService
 }
 
-// CORREÇÃO 1: Atribuição correta no Construtor
 func NewCreateCustomerUseCase(
 	repo CustomerRepositoryInterface,
 	planRepo PlanRepositoryInterface,
 	gateway PaymentGateway,
 	benefitService BenefitProvider,
+	emailService EmailService,
 ) *CreateCustomerUseCase {
 	return &CreateCustomerUseCase{
 		Repo:           repo,
 		PlanRepo:       planRepo,
 		Gateway:        gateway,
-		BenefitService: benefitService, // <--- Faltava essa linha! Sem ela o código quebrava.
+		BenefitService: benefitService,
+		// ---------------------------------------------------------
+		// CORREÇÃO 2: Adicionando o EmailService aqui para não dar Panic
+		// ---------------------------------------------------------
+		EmailService: emailService,
 	}
 }
 
 func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustomerInput) (*CreateCustomerOutput, error) {
-	// 1. Conversão de Tipos Básicos
-
-	fmt.Printf("🔍 DEBUG CPF CHEGANDO: [%s]\n", input.CPF)
 	genderInt, _ := strconv.Atoi(input.Gender)
 
-	// Busca o plano no banco para saber o preço e o CodOnix
 	plan, err := uc.PlanRepo.FindByID(ctx, input.PlanID)
 	if err != nil {
 		return nil, fmt.Errorf("plano inválido ou não encontrado: %w", err)
 	}
 
-	// ---------------------------------------------------------
-	// 2. Integração ASAAS: Criar Cliente (Usando o novo DTO)
-	// ---------------------------------------------------------
-	// AQUI ESTAVA O ERRO: Use uc.Gateway, não uc.AsaasGateway
 	asaasCustomerID, err := uc.Gateway.CreateCustomer(asaas.CreateCustomerInput{
 		Name:          input.Name,
 		Email:         input.Email,
@@ -108,9 +111,6 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		return nil, fmt.Errorf("erro ao criar cliente no asaas: %w", err)
 	}
 
-	// ---------------------------------------------------------
-	// 3. Criação da Entidade de Domínio (Internal)
-	// ---------------------------------------------------------
 	address := entity.Address{
 		Street:     input.Street,
 		Number:     input.Number,
@@ -136,21 +136,17 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	}
 
 	customer.GatewayID = asaasCustomerID
-
 	customer.OnixCode = plan.ProviderPlanCode
-
 	amount := float64(plan.PriceCents) / 100.0
 
 	subID, status, err := uc.Gateway.Subscribe(asaas.SubscribeInput{
-		CustomerID: asaasCustomerID,
-		Price:      amount,
-
-		CardHolderName: input.CardHolder,
-		CardNumber:     input.CardNumber,
-		CardMonth:      input.CardMonth,
-		CardYear:       input.CardYear,
-		CardCCV:        input.CardCVV,
-
+		CustomerID:       asaasCustomerID,
+		Price:            amount,
+		CardHolderName:   input.CardHolder,
+		CardNumber:       input.CardNumber,
+		CardMonth:        input.CardMonth,
+		CardYear:         input.CardYear,
+		CardCCV:          input.CardCVV,
 		HolderEmail:      input.Email,
 		HolderCpfCnpj:    input.CPF,
 		HolderPostalCode: input.ZipCode,
@@ -163,28 +159,31 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	}
 	customer.SubscriptionID = subID
 
-	// ---------------------------------------------------------
-	// 5. Integração TEM SAÚDE: Gerar Carteirinha
-	// ---------------------------------------------------------
-	// Só chegamos aqui se o pagamento passou.
 	providerID, err := uc.BenefitService.RegisterBeneficiary(ctx, customer)
 	if err != nil {
-		// ALERTA CRÍTICO: O cliente pagou no Asaas, mas deu erro na Tem Saúde.
-		// Em produção, isso aqui deveria cair numa fila de "Retentativa" ou "Estorno".
 		return nil, fmt.Errorf("pagamento aprovado (ID %s), mas erro ao gerar carteirinha: %w", subID, err)
 	}
 
-	// Sucesso total
 	customer.ProviderID = providerID
-	customer.Status = status // "ACTIVE"
+	customer.Status = status
 
-	// ---------------------------------------------------------
-	// 6. Persistência: Salvar no nosso Banco
-	// ---------------------------------------------------------
 	err = uc.Repo.Create(ctx, customer)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao salvar venda no banco: %w", err)
 	}
+
+	// TODO: Mover URL para .env
+	bucketBaseURL := "https://yntprscrhdlrwkgnmzrb.supabase.co/storage/v1/object/public/public-assets/welcome-kits"
+
+	pdfLink := fmt.Sprintf("%s/kit_%s.pdf", bucketBaseURL, plan.ProviderPlanCode)
+
+	go func() {
+		// Agora isso vai funcionar porque EmailService foi injetado corretamente
+		err := uc.EmailService.SendWelcome(input.Email, input.Name, plan.Name, pdfLink)
+		if err != nil {
+			fmt.Printf("failed to send welcome email to %s: %v\n", input.Email, err)
+		}
+	}()
 
 	return &CreateCustomerOutput{
 		ID:     customer.ID,

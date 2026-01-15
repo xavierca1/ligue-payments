@@ -28,8 +28,8 @@ func (r *PlanRepository) FindByID(ctx context.Context, id string) (*entity.Plan,
 	err := row.Scan(
 		&plan.ID,
 		&plan.Name,
-		&plan.ProviderPlanCode,
 		&plan.PriceCents,
+		&plan.ProviderPlanCode,
 	)
 
 	if err != nil {

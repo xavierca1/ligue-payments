@@ -14,6 +14,8 @@ import (
 	"github.com/xavierca1/ligue-payments/internal/infra/database"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/temsaude"
+
+	"github.com/xavierca1/ligue-payments/internal/infra/mail"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
@@ -54,7 +56,13 @@ func main() {
 
 	gateway := asaas.NewClient(asaasKey, asaasURL)
 
-	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo, planRepo, gateway, temAdapter)
+	mailSender := mail.NewEmailSender(
+		os.Getenv("MAIL_HOST"),
+		587, // Converta se vier como string do env
+		os.Getenv("MAIL_USER"),
+		os.Getenv("MAIL_PASS"),
+	)
+	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo, planRepo, gateway, temAdapter, mailSender)
 	r := chi.NewRouter()
 
 	r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {
