@@ -62,7 +62,12 @@ func main() {
 		os.Getenv("MAIL_USER"),
 		os.Getenv("MAIL_PASS"),
 	)
-	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo, planRepo, gateway, temAdapter, mailSender)
+	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo,
+		planRepo,
+		gateway,
+		temAdapter,
+		mailSender,
+		os.Getenv("SUPABASE_STORAGE_URL"))
 	r := chi.NewRouter()
 
 	r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {

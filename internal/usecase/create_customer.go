@@ -64,11 +64,12 @@ type EmailService interface {
 }
 
 type CreateCustomerUseCase struct {
-	Repo           CustomerRepositoryInterface
-	PlanRepo       PlanRepositoryInterface
-	Gateway        PaymentGateway
-	BenefitService BenefitProvider
-	EmailService   EmailService
+	Repo             CustomerRepositoryInterface
+	PlanRepo         PlanRepositoryInterface
+	Gateway          PaymentGateway
+	BenefitService   BenefitProvider
+	EmailService     EmailService
+	WelcomeBucketURL string
 }
 
 func NewCreateCustomerUseCase(
@@ -77,6 +78,7 @@ func NewCreateCustomerUseCase(
 	gateway PaymentGateway,
 	benefitService BenefitProvider,
 	emailService EmailService,
+	welcomeBucketURL string,
 ) *CreateCustomerUseCase {
 	return &CreateCustomerUseCase{
 		Repo:           repo,
@@ -173,10 +175,8 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	}
 
 	// TODO: Mover URL para .env
-	bucketBaseURL := "https://yntprscrhdlrwkgnmzrb.supabase.co/storage/v1/object/public/public-assets/welcome-kits"
 
-	pdfLink := fmt.Sprintf("%s/kit_%s.pdf", bucketBaseURL, plan.ProviderPlanCode)
-
+	pdfLink := fmt.Sprintf("%s/kit_%s.pdf", uc.WelcomeBucketURL, plan.ProviderPlanCode)
 	go func() {
 		// Agora isso vai funcionar porque EmailService foi injetado corretamente
 		err := uc.EmailService.SendWelcome(input.Email, input.Name, plan.Name, pdfLink)
