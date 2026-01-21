@@ -31,6 +31,7 @@ type Customer struct {
 	BirthDate string  `json:"birth_date"`
 	Gender    int     `json:"gender"`
 	Address   Address `json:"address"`
+	PlanID    string  `json:"PlanID"`
 
 	// IDs externos
 	GatewayID      string    `json:"gateway_id"`
