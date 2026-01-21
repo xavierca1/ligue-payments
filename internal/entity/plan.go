@@ -9,4 +9,5 @@ type Plan struct {
 	Name             string
 	ProviderPlanCode string
 	PriceCents       int
+	Provider         string
 }

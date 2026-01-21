@@ -7,88 +7,26 @@ import (
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
+	"github.com/xavierca1/ligue-payments/internal/infra/queue"
 )
-
-type CreateCustomerInput struct {
-	Name   string `json:"name"`
-	Email  string `json:"email"`
-	CPF    string `json:"cpf"`
-	PlanID string `json:"plan_id"`
-
-	Phone     string `json:"phone"`
-	BirthDate string `json:"birth_date"`
-	Gender    string `json:"gender"`
-
-	Street     string `json:"street"`
-	Number     string `json:"number"`
-	Complement string `json:"complement"`
-	District   string `json:"district"`
-	City       string `json:"city"`
-	State      string `json:"state"`
-	ZipCode    string `json:"zip_code"`
-	OnixCode   string `json:"onix_code"`
-	CardHolder string `json:"card_holder"`
-	CardNumber string `json:"card_number"`
-	CardMonth  string `json:"card_month"`
-	CardYear   string `json:"card_year"`
-	CardCVV    string `json:"card_cvv"`
-}
-
-type CreateCustomerOutput struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Email  string `json:"email"`
-	Status string `json:"status"`
-	Msg    string `json:"msg"`
-}
-
-type CustomerRepositoryInterface interface {
-	Create(ctx context.Context, c *entity.Customer) error
-}
-
-type PlanRepositoryInterface interface {
-	FindByID(ctx context.Context, id string) (*entity.Plan, error)
-}
-
-type PaymentGateway interface {
-	CreateCustomer(input asaas.CreateCustomerInput) (string, error)
-	Subscribe(input asaas.SubscribeInput) (string, string, error)
-}
-
-// ---------------------------------------------------------
-// CORREÇÃO 1: Definindo a interface que faltava
-// ---------------------------------------------------------
-
-type EmailService interface {
-	SendWelcome(to, name, productName, pdfLink string) error
-}
-
-type CreateCustomerUseCase struct {
-	Repo             CustomerRepositoryInterface
-	PlanRepo         PlanRepositoryInterface
-	Gateway          PaymentGateway
-	BenefitService   BenefitProvider
-	EmailService     EmailService
-	WelcomeBucketURL string
-}
 
 func NewCreateCustomerUseCase(
 	repo CustomerRepositoryInterface,
 	planRepo PlanRepositoryInterface,
 	gateway PaymentGateway,
-	benefitService BenefitProvider,
+	queue QueueProducerInterface,
+	// benefitService BenefitProvider,
 	emailService EmailService,
 	welcomeBucketURL string,
 ) *CreateCustomerUseCase {
 	return &CreateCustomerUseCase{
-		Repo:           repo,
-		PlanRepo:       planRepo,
-		Gateway:        gateway,
-		BenefitService: benefitService,
-		// ---------------------------------------------------------
-		// CORREÇÃO 2: Adicionando o EmailService aqui para não dar Panic
-		// ---------------------------------------------------------
-		EmailService: emailService,
+		Repo:     repo,
+		PlanRepo: planRepo,
+		Gateway:  gateway,
+		// BenefitService: benefitService,
+		Queue:            queue,
+		EmailService:     emailService,
+		WelcomeBucketURL: welcomeBucketURL,
 	}
 }
 
@@ -124,72 +62,105 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	}
 
 	customer, err := entity.NewCustomer(
-		input.Name,
-		input.Email,
-		input.CPF,
-		input.OnixCode,
-		input.Phone,
-		input.BirthDate,
-		genderInt,
-		address,
+		input.Name, input.Email, input.CPF, input.OnixCode,
+		input.Phone, input.BirthDate, genderInt, address,
 	)
 	if err != nil {
 		return nil, err
 	}
 
 	customer.GatewayID = asaasCustomerID
-	customer.OnixCode = plan.ProviderPlanCode
+
 	amount := float64(plan.PriceCents) / 100.0
 
-	subID, status, err := uc.Gateway.Subscribe(asaas.SubscribeInput{
-		CustomerID:       asaasCustomerID,
-		Price:            amount,
-		CardHolderName:   input.CardHolder,
-		CardNumber:       input.CardNumber,
-		CardMonth:        input.CardMonth,
-		CardYear:         input.CardYear,
-		CardCCV:          input.CardCVV,
-		HolderEmail:      input.Email,
-		HolderCpfCnpj:    input.CPF,
-		HolderPostalCode: input.ZipCode,
-		HolderAddressNum: input.Number,
-		HolderPhone:      input.Phone,
-	})
+	var pixCode, pixQRCode string
 
-	if err != nil {
-		return nil, fmt.Errorf("erro no pagamento: %w", err)
+	if input.PaymentMethod == "PIX" {
+
+		subID, pixData, err := uc.Gateway.SubscribePix(asaas.SubscribePixInput{
+			CustomerID: asaasCustomerID,
+			Price:      int64(plan.PriceCents),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("erro ao gerar PIX: %w", err)
+		}
+
+		customer.SubscriptionID = subID
+		customer.Status = "WAITING_PAYMENT"
+
+		pixCode = pixData.CopyPaste
+		pixQRCode = pixData.URL
+
+	} else {
+
+		subID, status, err := uc.Gateway.Subscribe(asaas.SubscribeInput{
+			CustomerID:       asaasCustomerID,
+			Price:            amount,
+			CardHolderName:   input.CardHolder,
+			CardNumber:       input.CardNumber,
+			CardMonth:        input.CardMonth,
+			CardYear:         input.CardYear,
+			CardCCV:          input.CardCVV,
+			HolderEmail:      input.Email,
+			HolderCpfCnpj:    input.CPF,
+			HolderPostalCode: input.ZipCode,
+			HolderAddressNum: input.Number,
+			HolderPhone:      input.Phone,
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("erro no pagamento via cartão: %w", err)
+		}
+
+		customer.SubscriptionID = subID
+		customer.Status = status // Ex: "ACTIVE" ou "CONFIRMED"
+
+		// B. MANDA PARA A FILA (RABBITMQ) 🐰
+		// O pagamento passou, então avisamos o Worker para ativar na Tem/Doc24
+		payload := queue.ActivationPayload{
+			CustomerID: customer.ID,
+			PlanID:     plan.ID,
+			Provider:   plan.Provider, // "TEM_SAUDE" ou "DOC24"
+			Name:       customer.Name,
+			Email:      customer.Email,
+			Origin:     "CHECKOUT_CREDIT_CARD",
+		}
+
+		err = uc.Queue.PublishActivation(ctx, payload)
+		if err != nil {
+			// Logamos o erro, mas NÃO travamos a venda. O dinheiro já foi capturado.
+			fmt.Printf("⚠️ ERRO CRÍTICO: Falha ao publicar na fila RabbitMQ: %v\n", err)
+			// Opcional: Poderia salvar em uma tabela de 'retry_queue' no banco
+		}
 	}
-	customer.SubscriptionID = subID
-
-	providerID, err := uc.BenefitService.RegisterBeneficiary(ctx, customer)
-	if err != nil {
-		return nil, fmt.Errorf("pagamento aprovado (ID %s), mas erro ao gerar carteirinha: %w", subID, err)
-	}
-
-	customer.ProviderID = providerID
-	customer.Status = status
 
 	err = uc.Repo.Create(ctx, customer)
 	if err != nil {
-		return nil, fmt.Errorf("erro ao salvar venda no banco: %w", err)
+		return nil, fmt.Errorf("erro ao salvar cliente no banco: %w", err)
 	}
 
-	// TODO: Mover URL para .env
-
-	pdfLink := fmt.Sprintf("%s/kit_%s.pdf", uc.WelcomeBucketURL, plan.ProviderPlanCode)
 	go func() {
-		// Agora isso vai funcionar porque EmailService foi injetado corretamente
-		err := uc.EmailService.SendWelcome(input.Email, input.Name, plan.Name, pdfLink)
-		if err != nil {
-			fmt.Printf("failed to send welcome email to %s: %v\n", input.Email, err)
+		if customer.Status != "WAITING_PAYMENT" {
+
+			pdfLink := fmt.Sprintf("%s/kit_%s.pdf", uc.WelcomeBucketURL, plan.ProviderPlanCode)
+
+			err := uc.EmailService.SendWelcome(input.Email, input.Name, plan.Name, pdfLink)
+
+			if err != nil {
+				fmt.Printf("⚠️ FALHA EMAIL: %v\n", err)
+			} else {
+				fmt.Printf("📧 Email enviado para %s\n", input.Email)
+			}
 		}
 	}()
 
 	return &CreateCustomerOutput{
-		ID:     customer.ID,
-		Name:   customer.Name,
-		Email:  customer.Email,
-		Status: status,
-		Msg:    "Sucesso! Carteirinha: " + providerID,
+		ID:           customer.ID,
+		Name:         customer.Name,
+		Email:        customer.Email,
+		Status:       customer.Status,
+		Msg:          "Operação realizada com sucesso",
+		PixCode:      pixCode,   // Cheio se for PIX, Vazio se for Cartão
+		PixQRCodeURL: pixQRCode, // Cheio se for PIX, Vazio se for Cartão
 	}, nil
 }

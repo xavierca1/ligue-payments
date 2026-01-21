@@ -1,5 +1,37 @@
 package asaas
 
+type PixOutput struct {
+	CopyPaste string
+	URL       string
+}
+
+// Struct auxiliar para ler a lista de pagamentos do Asaas
+type listPaymentsResponse struct {
+	Data []struct {
+		ID string `json:"id"` // O Payment ID que queremos!
+	} `json:"data"`
+}
+
+// Resposta quando criamos a assinatura
+type asaasSubscriptionResponse struct {
+	ID string `json:"id"`
+}
+type SubscribePixInput struct {
+	CustomerID string
+	Price      int64
+}
+
+// Resposta quando listamos as cobranças (para achar o ID do pagamento)
+type asaasListPaymentsResponse struct {
+	Data []struct {
+		ID string `json:"id"`
+	} `json:"data"`
+}
+
+type asaasQrCodeResponse struct {
+	EncodedImage string `json:"encodedImage"`
+	Payload      string `json:"payload"`
+}
 type SubscribeInput struct {
 	CustomerID string
 	Price      float64
@@ -29,9 +61,6 @@ type CreateCustomerInput struct {
 	AddressNumber string
 }
 
-// ... (Mantenha as structs privadas de createSubscriptionRequest, etc)
-
-// --- NOVO PAYLOAD INTERNO: O que mandamos pro Asaas ---
 type createCustomerRequest struct {
 	Name                 string `json:"name"`
 	Email                string `json:"email"`
@@ -43,7 +72,6 @@ type createCustomerRequest struct {
 	NotificationDisabled bool   `json:"notificationDisabled"`
 }
 
-// --- NOVO RESPONSE: O que o Asaas devolve ---
 type customerResponse struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -88,4 +116,8 @@ type creditCardHolderInfo struct {
 type subscriptionResponse struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
+}
+type SubscribePix struct {
+	CustomerID string
+	PriceCents int64
 }

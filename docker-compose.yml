@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # 🐘 O Banco de Dados (Postgres)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ligue_postgres
+    restart: always
+    ports:
+      - "5432:5432" # Porta Externa : Porta Interna
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ligue_payments
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Persistência (não perde dados se reiniciar)
+    networks:
+      - ligue-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d ligue_payments"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 🐰 A Fila (RabbitMQ)
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: ligue_rabbitmq
+    restart: always
+    ports:
+      - "5672:5672"   # Protocolo AMQP (Onde o Go conecta)
+      - "15672:15672" # Painel Administrativo (Onde você acessa via Browser)
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq # Persistência das filas
+    networks:
+      - ligue-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# 🌐 Rede interna para eles conversarem entre si
+networks:
+  ligue-network:
+    driver: bridge
+
+# 💾 Discos Virtuais (Volumes)
+volumes:
+  postgres_data:
+  rabbitmq_data:

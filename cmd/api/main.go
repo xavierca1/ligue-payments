@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -13,9 +14,8 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/xavierca1/ligue-payments/internal/infra/database"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
-	"github.com/xavierca1/ligue-payments/internal/infra/integration/temsaude"
-
 	"github.com/xavierca1/ligue-payments/internal/infra/mail"
+	"github.com/xavierca1/ligue-payments/internal/infra/queue" // <--- Importa o pacote que você criou
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
@@ -29,9 +29,24 @@ func main() {
 	dbURL := os.Getenv("DATABASE_URL")
 	asaasKey := os.Getenv("ASAAS_API_KEY")
 	asaasURL := os.Getenv("ASAAS_URL")
-	temUrl := os.Getenv("TEM_SAUDE_URL")
-	temToken := os.Getenv("TEM_SAUDE_TOKEN")
-	temAdapter := temsaude.NewClient(temUrl, temToken)
+	// temUrl := os.Getenv("TEM_SAUDE_URL")
+	// temToken := os.Getenv("TEM_SAUDE_TOKEN")
+	// temAdapter := temsaude.NewClient(temUrl, temToken)
+
+	rabbitMQ, err := queue.NewRabbitMQ("user", "password", "localhost", "5672")
+	if err != nil {
+		// Se não conectar na fila, mata a aplicação.
+		// É melhor cair do que rodar "quebrado".
+		panic(fmt.Sprintf("❌ Erro fatal no RabbitMQ: %v", err))
+	}
+
+	producer := queue.NewProducer(rabbitMQ.Conn, rabbitMQ.Ch)
+
+	// Garante que fecha a conexão quando o programa parar
+	defer rabbitMQ.Conn.Close()
+	defer rabbitMQ.Ch.Close()
+
+	fmt.Println("RabbitMQ 🐰 conectado e Topologia (Filas/DLQ) criada!")
 
 	if dbURL == "" {
 		println("Erro em buscar o database no .env")
@@ -65,7 +80,8 @@ func main() {
 	createCustomerUC := usecase.NewCreateCustomerUseCase(customerRepo,
 		planRepo,
 		gateway,
-		temAdapter,
+		// temAdapter,
+		producer,
 		mailSender,
 		os.Getenv("SUPABASE_STORAGE_URL"))
 	r := chi.NewRouter()
