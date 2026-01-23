@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -18,6 +19,11 @@ type Subscription struct {
 	PaymentMethodID string    `json:"payment_method_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
+}
+type SubscriptionRepository interface {
+	Create(ctx context.Context, sub *Subscription) error
+	GetStatusByCustomerID(customerID string) (string, error)
+	UpdateStatus(customerID string, status string) error
 }
 
 // NewSubscription cria uma nova instância com ID e Timestamps

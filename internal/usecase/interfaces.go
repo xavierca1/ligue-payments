@@ -84,3 +84,14 @@ type CreateCustomerUseCase struct {
 	EmailService     EmailService
 	WelcomeBucketURL string
 }
+type ActivateSubscriptionInput struct {
+	CustomerID string
+	// Futuramente pode ter: TransactionID string
+}
+
+// ActivateSubscriptionUseCase orquestra a liberação do acesso
+type ActivateSubscriptionUseCase struct {
+	SubRepo      SubscriptionRepository // Interface já definida no create_customer.go
+	Queue        QueueProducerInterface // Interface do RabbitMQ
+	EmailService EmailService           // Interface de Email
+}

@@ -17,7 +17,9 @@ type ActivationPayload struct {
 	Email      string `json:"email"`
 	Origin     string `json:"origin"` // "CHECKOUT_CREDIT" ou "WEBHOOK_PIX"
 }
-
+type QueueProducerInterface interface {
+	PublishActivation(ctx context.Context, payload ActivationPayload) error
+}
 type RabbitMQProducer struct {
 	Conn *amqp.Connection
 	Ch   *amqp.Channel

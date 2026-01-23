@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -47,7 +48,6 @@ type Customer struct {
 	TermsVersion    string    `json:"terms_version"`
 }
 
-// Factory
 func NewCustomer(name, email, cpf, onixCode, phone, birthDate string, gender int, address Address) (*Customer, error) {
 	customer := &Customer{
 		ID:        uuid.New().String(),
@@ -86,4 +86,12 @@ func (c *Customer) Validate() error {
 		return errors.New("address street is required")
 	}
 	return nil
+}
+
+type CustomerRepositoryInterface interface {
+	Create(ctx context.Context, customer *Customer) error
+	FindByGatewayID(id string) (*Customer, error)
+}
+type PlanRepositoryInterface interface {
+	FindByID(ctx context.Context, id string) (*Plan, error)
 }
