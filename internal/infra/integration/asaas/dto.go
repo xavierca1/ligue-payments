@@ -61,6 +61,10 @@ type CreateCustomerInput struct {
 	AddressNumber string
 }
 
+type PixResponse struct {
+	CopyPaste string `json:"payload"`      // O código "copia e cola"
+	URL       string `json:"encodedImage"` // A imagem base64 do QR Code
+}
 type createCustomerRequest struct {
 	Name                 string `json:"name"`
 	Email                string `json:"email"`

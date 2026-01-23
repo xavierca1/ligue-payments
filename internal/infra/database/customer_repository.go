@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"log"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 )
@@ -73,14 +72,10 @@ func (r *CustomerRepository) FindByGatewayID(gatewayID string) (*entity.Customer
 }
 
 func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) error {
-	// 🛡️ PROTEÇÃO CONTRA UUID VAZIO
-	// Se o PlanID não veio do UseCase, usamos um ID padrão ou retornamos erro.
-	// Para destravar seu teste agora, vou colocar aquele ID que você usava:
 	if c.PlanID == "" {
 		c.PlanID = "15b4965d-c234-410c-83ae-ac826051e672"
 	}
 
-	// A query continua a mesma...
 	query := `
         INSERT INTO customers (
             id, 
@@ -102,14 +97,21 @@ func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) err
             state,
             zip_code,
             created_at, 
-            updated_at
+            updated_at,
+            terms_accepted,     -- 🆕 Campo 21
+            terms_accepted_at,  -- 🆕 Campo 22
+            terms_version       -- 🆕 Campo 23 (Aqui entra "DOC24_v1" ou "TEM_v1")
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
+            $21, $22, $23
+        )
     `
 
 	_, err := r.DB.ExecContext(ctx, query,
 		c.ID,
-		c.PlanID, // Agora garantimos que não é ""
+		c.PlanID,
 		c.Name,
 		c.Email,
 		c.CPF,
@@ -128,11 +130,24 @@ func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) err
 		c.Address.ZipCode,
 		c.CreatedAt,
 		c.UpdatedAt,
+		c.TermsAccepted,
+		c.TermsAcceptedAt,
+		c.TermsVersion,
 	)
 
 	if err != nil {
-		log.Printf("❌ Erro crítico ao criar cliente no banco: %v", err)
 		return fmt.Errorf("erro no insert do cliente: %w", err)
+	}
+
+	return nil
+}
+
+func (r *CustomerRepository) Delete(ctx context.Context, id string) error {
+	query := `DELETE FROM customers WHERE id = $1`
+
+	_, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("erro ao deletar cliente %s: %w", id, err)
 	}
 
 	return nil

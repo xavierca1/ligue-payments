@@ -41,6 +41,10 @@ type Customer struct {
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"created_at"`
+
+	TermsAccepted   bool      `json:"terms_accepted"`
+	TermsAcceptedAt time.Time `json:"terms_accepted_at"`
+	TermsVersion    string    `json:"terms_version"`
 }
 
 // Factory

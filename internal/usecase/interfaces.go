@@ -48,8 +48,14 @@ type CreateCustomerOutput struct {
 
 type CustomerRepositoryInterface interface {
 	Create(ctx context.Context, c *entity.Customer) error
+	Delete(ctx context.Context, id string) error
 }
 
+type SubscriptionRepository interface {
+	Create(ctx context.Context, sub *entity.Subscription) error
+	GetStatusByCustomerID(customerID string) (string, error)
+	UpdateStatus(customerID string, status string) error
+}
 type PlanRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*entity.Plan, error)
 }
@@ -70,6 +76,7 @@ type EmailService interface {
 
 type CreateCustomerUseCase struct {
 	Repo             CustomerRepositoryInterface
+	SubRepo          SubscriptionRepository
 	PlanRepo         PlanRepositoryInterface
 	Gateway          PaymentGateway
 	BenefitService   BenefitProvider

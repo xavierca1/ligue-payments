@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	_ "github.com/lib/pq" // Driver do Postgres
 
 	"github.com/joho/godotenv"
@@ -95,6 +97,18 @@ func main() {
 		os.Getenv("SUPABASE_STORAGE_URL"))
 
 	r := chi.NewRouter()
+	r.Use(cors.Handler(cors.Options{
+		// Permite o front (Vite) e localhost genérico
+		AllowedOrigins:   []string{"http://localhost:5173", "http://localhost:3000", "*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
+	// ---------------------------------------
+
+	r.Use(middleware.Logger)
 
 	r.Post("/checkout", func(w http.ResponseWriter, r *http.Request) {
 		var input usecase.CreateCustomerInput
@@ -117,16 +131,14 @@ func main() {
 		json.NewEncoder(w).Encode(output)
 	})
 
-	// Rota de Webhook que o Asaas vai chamar
 	r.Post("/webhook", func(w http.ResponseWriter, r *http.Request) {
-		// Autenticação básica (Opcional por enquanto, mas bom ter no futuro)
-		// accessToken := r.Header.Get("asaas-access-token")
+		// ... (código de autenticação e decode igual ao seu) ...
 
 		var event struct {
 			Event   string `json:"event"`
 			Payment struct {
 				ID          string `json:"id"`
-				Customer    string `json:"customer"` // Esse é o ID `cus_...`
+				Customer    string `json:"customer"`
 				BillingType string `json:"billingType"`
 				Status      string `json:"status"`
 			} `json:"payment"`
@@ -138,22 +150,40 @@ func main() {
 			return
 		}
 
-		log.Printf(" Webhook recebido: Evento=%s | Cliente=%s", event.Event, event.Payment.Customer)
-
+		// Filtra eventos de pagamento real
 		if event.Event != "PAYMENT_RECEIVED" && event.Event != "PAYMENT_CONFIRMED" {
-			w.WriteHeader(200) // Responde OK pro Asaas parar de tentar
+			w.WriteHeader(200)
 			return
 		}
 
+		// Busca o cliente pelo ID do Asaas (cus_xxxx)
 		localCustomer, err := customerRepo.FindByGatewayID(event.Payment.Customer)
 		if err != nil {
-			log.Printf("❌ Cliente não encontrado (GatewayID: %s): %v", event.Payment.Customer, err)
-			w.WriteHeader(404) // Ou 200 pra não travar fila do Asaas
+			log.Printf("❌ Cliente não encontrado: %v", err)
+			w.WriteHeader(200) // Retorna 200 pro Asaas não ficar retentando em loop infinito
 			return
 		}
 
+		// 🚨 O PULO DO GATO PARA O FRONTEND FUNCIONAR 🚨
+		// Precisamos atualizar o banco AGORA para o Polling pegar
+		// Supondo que você tenha um método UpdateStatus no seu repo, ou rodando a query direta:
+
+		// Opção A: Via Repo (Recomendado)
+		err = customerRepo.UpdateStatus(r.Context(), localCustomer.ID, "CONFIRMED")
+
+		// Opção B: SQL Direto (Se não tiver o método no repo ainda)
+		// _, err = dbConn.ExecContext(r.Context(), "UPDATE customers SET status = 'CONFIRMED' WHERE id = $1", localCustomer.ID)
+
+		if err != nil {
+			log.Printf("❌ Erro ao atualizar status no banco: %v", err)
+			// Não damos erro fatal aqui para não travar a fila, mas logamos
+		} else {
+			log.Printf("✅ Status do cliente %s atualizado para CONFIRMED!", localCustomer.Name)
+		}
+		// ---------------------------------------------------
+
 		plan, _ := planRepo.FindByID(r.Context(), localCustomer.PlanID)
-		provider := "DOC24" // Default ou pega do plano
+		provider := "DOC24"
 		if plan != nil {
 			provider = plan.Provider
 		}
@@ -167,7 +197,6 @@ func main() {
 			Origin:     "WEBHOOK_ASAAS_REAL",
 		}
 
-		// 3. Publicar na Fila
 		err = producer.PublishActivation(r.Context(), payload)
 		if err != nil {
 			log.Printf("❌ Erro ao publicar na fila: %v", err)
@@ -178,7 +207,6 @@ func main() {
 		log.Printf("🚀 Cliente %s enviado para fila de ativação!", localCustomer.Name)
 		w.WriteHeader(200)
 	})
-
 	port := ":8080"
 	log.Printf("🔥 Server CorePay rodando na porta %s", port)
 	if err := http.ListenAndServe(port, r); err != nil {
