@@ -16,7 +16,7 @@ func NewCustomerRepository(db *sql.DB) *CustomerRepository {
 	return &CustomerRepository{DB: db}
 }
 
-func (r *CustomerRepository) FindByID(id string) (*entity.Customer, error) {
+func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.Customer, error) {
 	query := `
 		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0)  
 		FROM customers 
@@ -72,67 +72,65 @@ func (r *CustomerRepository) FindByGatewayID(gatewayID string) (*entity.Customer
 }
 
 func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) error {
-	if c.PlanID == "" {
-		c.PlanID = "15b4965d-c234-410c-83ae-ac826051e672"
-	}
-
 	query := `
-        INSERT INTO customers (
-            id, 
-            product_id, 
-            name, 
-            email, 
-            cpf_cnpj, 
-            phone,
-            birth_date,
-            gender,
-            gateway_id,
-            subscription_id,
-            status,
-            street,
-            number,
-            complement,
-            district,
-            city,
-            state,
-            zip_code,
-            created_at, 
-            updated_at,
-            terms_accepted,     -- 🆕 Campo 21
-            terms_accepted_at,  -- 🆕 Campo 22
-            terms_version       -- 🆕 Campo 23 (Aqui entra "DOC24_v1" ou "TEM_v1")
-        )
-        VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
-            $21, $22, $23
-        )
-    `
+		INSERT INTO customers (
+			id, 
+			product_id,     -- 🆕 $2 (A causa do erro FK)
+			plan_id,        -- 🔙 $3 (Adicionei de volta pra não perder)
+			name, 
+			email, 
+			cpf_cnpj, 
+			phone,
+			birth_date,
+			gender,
+			gateway_id,
+			subscription_id,
+			status,
+			street,
+			number,
+			complement,
+			district,
+			city,
+			state,
+			zip_code,
+			created_at, 
+			updated_at,
+			terms_accepted,    -- $22
+			terms_accepted_at, -- $23
+			terms_version      -- $24
+		)
+		VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
+			$21, $22, $23, $24
+		)
+	`
 
 	_, err := r.DB.ExecContext(ctx, query,
-		c.ID,
-		c.PlanID,
-		c.Name,
-		c.Email,
-		c.CPF,
-		c.Phone,
-		c.BirthDate,
-		c.Gender,
-		c.GatewayID,
-		c.SubscriptionID,
-		c.Status,
-		c.Address.Street,
-		c.Address.Number,
-		c.Address.Complement,
-		c.Address.District,
-		c.Address.City,
-		c.Address.State,
-		c.Address.ZipCode,
-		c.CreatedAt,
-		c.UpdatedAt,
-		c.TermsAccepted,
-		c.TermsAcceptedAt,
-		c.TermsVersion,
+		c.ID,                 // $1
+		c.ProductID,          // $2 (A CORREÇÃO: Passando o ID do Produto aqui)
+		c.PlanID,             // $3 (Passando o ID do Plano aqui)
+		c.Name,               // $4
+		c.Email,              // $5
+		c.CPF,                // $6
+		c.Phone,              // $7
+		c.BirthDate,          // $8
+		c.Gender,             // $9
+		c.GatewayID,          // $10
+		c.SubscriptionID,     // $11
+		c.Status,             // $12
+		c.Address.Street,     // $13
+		c.Address.Number,     // $14
+		c.Address.Complement, // $15
+		c.Address.District,   // $16
+		c.Address.City,       // $17
+		c.Address.State,      // $18
+		c.Address.ZipCode,    // $19
+		c.CreatedAt,          // $20
+		c.UpdatedAt,          // $21
+		c.TermsAccepted,      // $22
+		c.TermsAcceptedAt,    // $23
+		c.TermsVersion,       // $24
 	)
 
 	if err != nil {

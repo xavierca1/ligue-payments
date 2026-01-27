@@ -196,12 +196,16 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 
 func (c *Client) SubscribePix(input SubscribePixInput) (string, *PixOutput, error) {
 	priceFloat := float64(input.Price) / 100.0
+
+	loc, _ := time.LoadLocation("America/Sao_Paulo")
+	nowBrazil := time.Now().In(loc)
+
 	reqBody := map[string]interface{}{
 		"customer":    input.CustomerID,
 		"billingType": "PIX",
 		"value":       priceFloat,
 		"cycle":       "MONTHLY",
-		"nextDueDate": time.Now().Format("2006-01-02"), // Vence hoje
+		"nextDueDate": nowBrazil.Format("2006-01-02"), // Vence hoje
 		"description": "Plano Ligue - Assinatura",
 	}
 	respBody, err := c.post("/subscriptions", reqBody)

@@ -10,4 +10,5 @@ type Plan struct {
 	ProviderPlanCode string
 	PriceCents       int
 	Provider         string
+	ProductID        string
 }

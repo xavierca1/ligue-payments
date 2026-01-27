@@ -1,86 +1,90 @@
 package queue
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/xavierca1/ligue-payments/internal/infra/database"
-	"github.com/xavierca1/ligue-payments/internal/infra/integration/doc24"
+	"github.com/xavierca1/ligue-payments/internal/entity"
 )
 
-// DTO para ler o JSON da fila
-type ActivationMessage struct {
-	CustomerID string `json:"customer_id"`
+type TelemedicinaClient interface {
+	CreateBeneficiary(ctx context.Context, input ActivationPayload) error
 }
 
-// A Struct do Worker
 type Worker struct {
-	channel      *amqp.Channel
-	docClient    *doc24.Client
-	customerRepo *database.CustomerRepository
+	Channel   *amqp.Channel
+	DocClient TelemedicinaClient
+	Repo      entity.CustomerRepositoryInterface
 }
 
-// NewWorker cria a instância (Verifique se não tem nada depois do return aqui)
-func NewWorker(ch *amqp.Channel, doc *doc24.Client, repo *database.CustomerRepository) *Worker {
+func NewWorker(ch *amqp.Channel, docClient TelemedicinaClient, repo entity.CustomerRepositoryInterface) *Worker {
 	return &Worker{
-		channel:      ch,
-		docClient:    doc,
-		customerRepo: repo,
+		Channel:   ch,
+		DocClient: docClient,
+		Repo:      repo,
 	}
 }
 
 func (w *Worker) Start(queueName string) {
-	// ❌ REMOVI O w.channel.QueueDeclare QUE CAUSAVA O CONFLITO
-	// A fila já foi criada corretamente pelo rabbitmq.go
-
-	// Vamos direto ao consumo!
-	msgs, err := w.channel.Consume(
-		queueName,
-		"",    // consumer tag
-		true,  // auto-ack (Cuidado: se der erro no código abaixo, a msg é perdida. Ideal é false e dar Ack manual no final)
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args do consume (aqui pode ser nil de boa)
+	msgs, err := w.Channel.Consume(
+		queueName, // fila
+		"",        // consumer
+		false,     // auto-ack (vamos fazer ack manual pra garantir segurança)
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
 	)
 	if err != nil {
-		log.Fatalf("Erro ao registrar consumidor: %v", err)
+		log.Fatalf("❌ Falha ao registrar consumidor RabbitMQ: %s", err)
 	}
-
-	log.Printf("👷 Worker rodando e ouvindo a fila: %s", queueName)
 
 	forever := make(chan bool)
 
 	go func() {
 		for d := range msgs {
-			log.Printf("📥 [Worker] Recebido: %s", d.Body)
+			log.Printf("📥 Mensagem Recebida: %s", d.Body)
 
-			var msg ActivationMessage
-			if err := json.Unmarshal(d.Body, &msg); err != nil {
-				log.Printf("❌ Erro JSON: %v", err)
+			var payload ActivationPayload
+			if err := json.Unmarshal(d.Body, &payload); err != nil {
+				log.Printf("❌ Erro ao decodificar JSON: %s", err)
+				d.Nack(false, false) // Rejeita e não re-encaminha (mensagem podre)
 				continue
 			}
 
-			// Busca Cliente
-			customer, err := w.customerRepo.FindByID(msg.CustomerID)
-			if err != nil {
-				log.Printf("❌ Erro ao buscar cliente: %v", err)
-				continue
+			// Processamento Real
+			if err := w.processMessage(context.Background(), payload); err != nil {
+				log.Printf("❌ Erro ao processar ativação: %s", err)
+				// Se for erro temporário, poderia usar d.Nack(false, true) pra tentar de novo
+				// Aqui vamos rejeitar para não travar a fila no dev
+				d.Nack(false, false)
+			} else {
+				log.Printf("✅ Sucesso! Cliente %s integrado na %s.", payload.Name, payload.Provider)
+				d.Ack(false) // Confirma que processou
 			}
-
-			// Integração Doc24
-			log.Printf("🚀 Enviando %s para Doc24...", customer.Name)
-			err = w.docClient.CreateBeneficiary(customer)
-			if err != nil {
-				log.Printf("❌ Erro Doc24: %v", err)
-				// TODO: Se auto-ack fosse false, aqui daríamos Nack/Reject para cair na DLQ
-				continue
-			}
-
-			log.Printf("✅ SUCESSO! Cliente ativado: %s", customer.Name)
 		}
 	}()
 
+	log.Printf(" [*] Worker rodando e aguardando mensagens na fila %s", queueName)
 	<-forever
+}
+
+func (w *Worker) processMessage(ctx context.Context, payload ActivationPayload) error {
+	// Roteamento de Provedor
+	switch payload.Provider {
+	case "DOC24":
+		log.Println("🩺 Enviando para API da Doc24...")
+		return w.DocClient.CreateBeneficiary(ctx, payload)
+
+	case "TEM":
+		log.Println("🏥 Enviando para API da TEM Saúde...")
+		// return w.TemClient.Create(ctx, payload)
+		return nil // TODO: Implementar TEM
+
+	default:
+		log.Printf("⚠️ Provedor desconhecido: %s. Apenas logando.", payload.Provider)
+		return nil
+	}
 }

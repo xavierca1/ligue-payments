@@ -2,47 +2,61 @@ package doc24
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"sync" // 👈 Importante para segurança entre threads
 	"time"
 
-	"github.com/xavierca1/ligue-payments/internal/entity"
+	"github.com/xavierca1/ligue-payments/internal/infra/queue"
 )
 
 type Client struct {
-	baseURL      string
-	clientID     string
-	clientSecret string
-	httpClient   *http.Client
-	token        string
-	tokenExp     time.Time
+	ClientID     string
+	ClientSecret string
+	BaseURL      string
+	HTTP         *http.Client
+
+	// Campos para gerenciar o Token (Estado interno)
+	accessToken string
+	expiresAt   time.Time
+	mu          sync.Mutex // Cadeado para ninguém atropelar a renovação do token
 }
 
 type AuthResponse struct {
 	AccessToken string `json:"access_token"`
 	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
+	ExpiresIn   int    `json:"expires_in"` // Geralmente vem em segundos
 }
 
+// NewClient inicializa. Note que mudei User/Pass para ClientID/Secret para ficar semântico
 func NewClient(clientID, clientSecret string) *Client {
 	return &Client{
-		baseURL:      "https://tapi.doc24.com.ar/ws/api/v2",
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		BaseURL:      "https://api-hml.doc24.com.br", // Confirme se é essa URL de Auth mesmo
+		HTTP:         &http.Client{Timeout: 15 * time.Second},
 	}
 }
 
-func (c *Client) Authenticate() error {
-	if c.token != "" && time.Now().Add(1*time.Minute).Before(c.tokenExp) {
-		return nil
+// ensureValidToken verifica se o token existe e é válido. Se não, faz login.
+func (c *Client) ensureValidToken() error {
+	c.mu.Lock()         // 🔒 Trava: Só um worker renova por vez
+	defer c.mu.Unlock() // 🔓 Destrava quando terminar a função
+
+	// Margem de segurança de 1 minuto. Se faltar menos de 1 min pra vencer, renova.
+	if c.accessToken != "" && time.Now().Add(1*time.Minute).Before(c.expiresAt) {
+		return nil // Token ainda é válido
 	}
 
-	url := fmt.Sprintf("%s/authentication", c.baseURL)
+	log.Println("🔄 Token Doc24 expirado ou inexistente. Renovando...")
+
+	url := fmt.Sprintf("%s/authentication", c.BaseURL)
 	payload := map[string]string{
-		"client_id":     c.clientID,
-		"client_secret": c.clientSecret,
+		"client_id":     c.ClientID,
+		"client_secret": c.ClientSecret,
 	}
 
 	jsonBody, _ := json.Marshal(payload)
@@ -52,51 +66,63 @@ func (c *Client) Authenticate() error {
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
-		return fmt.Errorf("erro de conexão auth: %w", err)
+		return fmt.Errorf("erro conexão auth doc24: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
 		return fmt.Errorf("falha login doc24: status %d", resp.StatusCode)
 	}
 
 	var authResp AuthResponse
 	if err := json.NewDecoder(resp.Body).Decode(&authResp); err != nil {
-		return fmt.Errorf("erro decode auth: %w", err)
+		return fmt.Errorf("erro decode auth json: %w", err)
 	}
 
-	c.token = authResp.AccessToken
-	c.tokenExp = time.Now().Add(time.Duration(authResp.ExpiresIn) * time.Second)
+	c.accessToken = authResp.AccessToken
+	c.expiresAt = time.Now().Add(time.Duration(authResp.ExpiresIn) * time.Second)
 
+	log.Printf(" Novo Token Doc24 obtido! Válido até: %s", c.expiresAt.Format(time.RFC3339))
 	return nil
 }
 
-func (c *Client) CreateBeneficiary(customer *entity.Customer) error {
-	if err := c.Authenticate(); err != nil {
-		return fmt.Errorf("Erro de auth: ", err)
+func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPayload) error {
+	if err := c.ensureValidToken(); err != nil {
+		return fmt.Errorf("falha na autenticação antes de criar beneficiário: %w", err)
 	}
 
-	payload := mapToDoc24(customer)
-	jsonBody, err := json.Marshal(payload)
+	// 2. Monta o Payload
+	payload := map[string]interface{}{
+		"partner_user": c.ClientID, // As vezes pedem o user aqui dentro também
+		"external_id":  input.CustomerID,
+		"beneficiary": map[string]string{
+			"name":  input.Name,
+			"email": input.Email,
+			"plan":  input.PlanID,
+		},
+	}
+
+	jsonBody, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/beneficiaries/create", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
-	url := fmt.Sprintf("%s/afiliados", c.baseURL)
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 
-	req.Header.Set("Authorization", "Bearer "+c.token)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	req.Header.Set("Authorization", "Bearer "+c.accessToken)
+
+	resp, err := c.HTTP.Do(req)
 	if err != nil {
 		return fmt.Errorf("erro request doc24: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("erro doc24 status: %d", resp.StatusCode)
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("doc24 erro na criação: status %d", resp.StatusCode)
 	}
 
 	return nil

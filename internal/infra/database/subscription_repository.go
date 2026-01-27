@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 )
@@ -17,69 +17,67 @@ func NewSubscriptionRepository(db *sql.DB) *SubscriptionRepository {
 	return &SubscriptionRepository{DB: db}
 }
 
-func (r *SubscriptionRepository) GetStatusByCustomerID(customerID string) (string, error) {
-	query := `SELECT status FROM subscriptions WHERE customer_id = $1`
+func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscription) error {
+	pid := strings.TrimSpace(sub.ProductID)
 
-	var status string
-	err := r.DB.QueryRow(query, customerID).Scan(&status)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return "NOT_FOUND", nil
-		}
-		return "", fmt.Errorf("erro ao consultar status no banco: %v", err)
-	}
-
-	return status, nil
-}
-
-func (r *SubscriptionRepository) UpdateStatus(customerID string, status string) error {
-	query := `UPDATE subscriptions SET status = $1, updated_at = $2 WHERE customer_id = $3`
-
-	_, err := r.DB.Exec(query, status, time.Now(), customerID)
-
-	if err != nil {
-		return fmt.Errorf("erro ao atualizar status da assinatura do cliente %s: %w", customerID, err)
-	}
-	return nil
-}
-
-func (r *SubscriptionRepository) Create(ctx context.Context, c *entity.Subscription) error {
-	query := ` 
-		INSERT INTO subscriptions(
-		id,
-		plan_id,
-		customer_id,
-		product_id,
-		amount,
-		status, 
-		interval, 
-		next_billing_date,
-		payment_method_id, 
-		created_at,
-		updated_at
-
+	query := `
+		INSERT INTO subscriptions (
+			id, 
+			product_id,        -- 🆕 $2 (Obrigatório)
+			customer_id,       -- $3
+			plan_id,           -- $4
+			amount,            
+			status, 
+			next_billing_date, 
+			created_at, 
+			updated_at,
+            payment_method_id  -- $10 (Pode ser Null)
+		) VALUES (
+			$1, 
+            $2::uuid,          -- 🆕 Forçamos o UUID aqui
+            $3, $4, $5, $6, $7, $8, $9, 
+            NULLIF($10, '')::uuid
 		)
-	VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`
+	`
 
-	_, err := r.DB.ExecContext(ctx, query,
-		c.ID,
-		c.PlanID,
-		c.CustomerID,
-		c.ProductID,
-		c.Amount,
-		c.Status,
-		c.Interval,
-		c.NextBillingDate,
-		c.PaymentMethodID,
-		c.CreatedAt,
-		c.UpdatedAt,
+	fmt.Printf(" [REPO SUBSCRIPTION] Salvando ID=%s | ProductID=%s\n", sub.ID, pid)
+
+	_, err := r.DB.ExecContext(
+		ctx,
+		query,
+		sub.ID,              // $1
+		pid,                 // $2 (AQUI ESTÁ A CORREÇÃO)
+		sub.CustomerID,      // $3
+		sub.PlanID,          // $4
+		sub.Amount,          // $5
+		sub.Status,          // $6
+		sub.NextBillingDate, // $7
+		sub.CreatedAt,       // $8
+		sub.UpdatedAt,       // $9
+
+		"",
 	)
 
 	if err != nil {
-		return fmt.Errorf("Erro ao insert no subscription: %w", err)
+		return fmt.Errorf("FALHA AO CRIAR ASSINATURA: %w", err)
 	}
-	return nil
 
+	return nil
+}
+
+func (r *SubscriptionRepository) UpdateStatus(id string, status string) error {
+	// Atualiza status baseado no CustomerID
+	query := `UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE customer_id = $2`
+	_, err := r.DB.Exec(query, status, id)
+	return err
+}
+
+func (r *SubscriptionRepository) GetStatusByCustomerID(customerID string) (string, error) {
+	query := `SELECT status FROM subscriptions WHERE customer_id = $1 ORDER BY created_at DESC LIMIT 1`
+	var status string
+	err := r.DB.QueryRow(query, customerID).Scan(&status)
+	if err != nil {
+		return "", err
+	}
+	return status, nil
 }

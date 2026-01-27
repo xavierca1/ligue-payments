@@ -32,7 +32,9 @@ type Customer struct {
 	BirthDate string  `json:"birth_date"`
 	Gender    int     `json:"gender"`
 	Address   Address `json:"address"`
-	PlanID    string  `json:"PlanID"`
+	PlanID    string  `json:"plan_id"`
+
+	ProductID string `json:"product_id"`
 
 	// IDs externos
 	GatewayID      string    `json:"gateway_id"`
@@ -91,6 +93,7 @@ func (c *Customer) Validate() error {
 type CustomerRepositoryInterface interface {
 	Create(ctx context.Context, customer *Customer) error
 	FindByGatewayID(id string) (*Customer, error)
+	FindByID(ctx context.Context, id string) (*Customer, error)
 }
 type PlanRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*Plan, error)

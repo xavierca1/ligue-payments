@@ -6,27 +6,21 @@ import (
 	"net/http"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
-	"github.com/xavierca1/ligue-payments/internal/infra/queue"
+	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
 type WebhookHandler struct {
-	CustomerRepo entity.CustomerRepositoryInterface
-	SubRepo      entity.SubscriptionRepository
-	PlanRepo     entity.PlanRepositoryInterface
-	Producer     queue.QueueProducerInterface
+	CustomerRepo  entity.CustomerRepositoryInterface
+	ActivateSubUC *usecase.ActivateSubscriptionUseCase
 }
 
 func NewWebhookHandler(
 	customerRepo entity.CustomerRepositoryInterface,
-	subRepo entity.SubscriptionRepository,
-	planRepo entity.PlanRepositoryInterface,
-	producer queue.QueueProducerInterface,
+	activateSubUC *usecase.ActivateSubscriptionUseCase,
 ) *WebhookHandler {
 	return &WebhookHandler{
-		CustomerRepo: customerRepo,
-		SubRepo:      subRepo,
-		PlanRepo:     planRepo,
-		Producer:     producer,
+		CustomerRepo:  customerRepo,
+		ActivateSubUC: activateSubUC,
 	}
 }
 
@@ -51,34 +45,18 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(event.Payment.Customer)
 	if err != nil {
-		log.Printf("❌ Cliente não encontrado: %v", err)
-		w.WriteHeader(200)
+		log.Printf("❌ Webhook: Cliente não encontrado (GatewayID: %s): %v", event.Payment.Customer, err)
+		w.WriteHeader(200) // 200 pro Asaas parar de tentar
 		return
 	}
 
-	if err := h.SubRepo.UpdateStatus(localCustomer.ID, "ACTIVE"); err != nil {
-		log.Printf(" Erro ao atualizar status: %v", err)
-	} else {
-		log.Printf(" Assinatura ativada para %s", localCustomer.Name)
-	}
-
-	plan, _ := h.PlanRepo.FindByID(r.Context(), localCustomer.PlanID)
-	provider := "DOC24"
-	if plan != nil {
-		provider = plan.Provider
-	}
-
-	payload := queue.ActivationPayload{
+	input := usecase.ActivateSubscriptionInput{
 		CustomerID: localCustomer.ID,
-		PlanID:     localCustomer.PlanID,
-		Provider:   provider,
-		Name:       localCustomer.Name,
-		Email:      localCustomer.Email,
-		Origin:     "WEBHOOK_ASAAS",
+		GatewayID:  event.Payment.ID,
 	}
 
-	if err := h.Producer.PublishActivation(r.Context(), payload); err != nil {
-		log.Printf(" Erro fila: %v", err)
+	if err := h.ActivateSubUC.Execute(r.Context(), input); err != nil {
+		log.Printf(" Erro na ativação: %v", err)
 		w.WriteHeader(500)
 		return
 	}

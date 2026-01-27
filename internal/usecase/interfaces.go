@@ -17,23 +17,24 @@ type CreateCustomerInput struct {
 	CPF    string `json:"cpf"`
 	PlanID string `json:"plan_id"`
 
-	Phone         string `json:"phone"`
-	BirthDate     string `json:"birth_date"`
-	Gender        string `json:"gender"`
-	PaymentMethod string `json:"payment_method"`
-	Street        string `json:"street"`
-	Number        string `json:"number"`
-	Complement    string `json:"complement"`
-	District      string `json:"district"`
-	City          string `json:"city"`
-	State         string `json:"state"`
-	ZipCode       string `json:"zip_code"`
-	OnixCode      string `json:"onix_code"`
-	CardHolder    string `json:"card_holder"`
-	CardNumber    string `json:"card_number"`
-	CardMonth     string `json:"card_month"`
-	CardYear      string `json:"card_year"`
-	CardCVV       string `json:"card_cvv"`
+	Phone             string `json:"phone"`
+	BirthDate         string `json:"birth_date"`
+	Gender            string `json:"gender"`
+	PaymentMethod     string `json:"payment_method"`
+	Street            string `json:"street"`
+	Number            string `json:"number"`
+	Complement        string `json:"complement"`
+	District          string `json:"district"`
+	City              string `json:"city"`
+	State             string `json:"state"`
+	ZipCode           string `json:"zip_code"`
+	ExternalReference string `json:"externalReference,omitempty"`
+	OnixCode          string `json:"onix_code"`
+	CardHolder        string `json:"card_holder"`
+	CardNumber        string `json:"card_number"`
+	CardMonth         string `json:"card_month"`
+	CardYear          string `json:"card_year"`
+	CardCVV           string `json:"card_cvv"`
 }
 
 type CreateCustomerOutput struct {
@@ -84,14 +85,19 @@ type CreateCustomerUseCase struct {
 	EmailService     EmailService
 	WelcomeBucketURL string
 }
-type ActivateSubscriptionInput struct {
-	CustomerID string
-	// Futuramente pode ter: TransactionID string
-}
 
 // ActivateSubscriptionUseCase orquestra a liberação do acesso
+
+type ActivateSubscriptionInput struct {
+	CustomerID string
+	GatewayID  string
+}
+
+// Struct ATUALIZADA com todos os repositórios necessários
 type ActivateSubscriptionUseCase struct {
-	SubRepo      SubscriptionRepository // Interface já definida no create_customer.go
-	Queue        QueueProducerInterface // Interface do RabbitMQ
-	EmailService EmailService           // Interface de Email
+	SubRepo      entity.SubscriptionRepository
+	CustomerRepo entity.CustomerRepositoryInterface // 👈 ADICIONADO: Pra pegar Nome/Email
+	PlanRepo     entity.PlanRepositoryInterface     // 👈 ADICIONADO: Pra pegar o Provider
+	Queue        queue.QueueProducerInterface
+	EmailService EmailService
 }

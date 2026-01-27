@@ -52,13 +52,14 @@ type SubscribeInput struct {
 }
 
 type CreateCustomerInput struct {
-	Name          string
-	Email         string
-	CpfCnpj       string
-	Phone         string
-	MobilePhone   string
-	PostalCode    string
-	AddressNumber string
+	Name              string `json:"name"`
+	Email             string `json:"email"`
+	CpfCnpj           string `json:"cpfCnpj"`
+	Phone             string `json:"phone,omitempty"`
+	MobilePhone       string `json:"mobilePhone,omitempty"` // Celular
+	PostalCode        string `json:"postalCode,omitempty"`
+	AddressNumber     string `json:"addressNumber,omitempty"`
+	ExternalReference string `json:"externalReference,omitempty"` // O campo novo
 }
 
 type PixResponse struct {
