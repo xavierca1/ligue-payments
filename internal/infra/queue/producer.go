@@ -15,7 +15,12 @@ type ActivationPayload struct {
 	Provider   string `json:"provider"`
 	Name       string `json:"name"`
 	Email      string `json:"email"`
-	Origin     string `json:"origin"` // "CHECKOUT_CREDIT" ou "WEBHOOK_PIX"
+
+	// 👇 Campos novos vitais para a Doc24/Integrações
+	Phone string `json:"phone"`
+	CPF   string `json:"cpf"`
+
+	Origin string `json:"origin"`
 }
 type QueueProducerInterface interface {
 	PublishActivation(ctx context.Context, payload ActivationPayload) error

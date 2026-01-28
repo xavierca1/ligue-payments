@@ -6,9 +6,9 @@ import (
 	"log"
 
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/xavierca1/ligue-payments/internal/entity"
 )
 
+// TelemedicinaClient define o contrato para integrações (Doc24, TEM, etc)
 type TelemedicinaClient interface {
 	CreateBeneficiary(ctx context.Context, input ActivationPayload) error
 }
@@ -16,14 +16,14 @@ type TelemedicinaClient interface {
 type Worker struct {
 	Channel   *amqp.Channel
 	DocClient TelemedicinaClient
-	Repo      entity.CustomerRepositoryInterface
+	// Repo removido! O Worker agora é 100% desacoplado do Banco de Dados. 🚀
 }
 
-func NewWorker(ch *amqp.Channel, docClient TelemedicinaClient, repo entity.CustomerRepositoryInterface) *Worker {
+// NewWorker agora só precisa do Canal e do Cliente de Telemedicina
+func NewWorker(ch *amqp.Channel, docClient TelemedicinaClient) *Worker {
 	return &Worker{
 		Channel:   ch,
 		DocClient: docClient,
-		Repo:      repo,
 	}
 }
 
@@ -31,7 +31,7 @@ func (w *Worker) Start(queueName string) {
 	msgs, err := w.Channel.Consume(
 		queueName, // fila
 		"",        // consumer
-		false,     // auto-ack (vamos fazer ack manual pra garantir segurança)
+		false,     // auto-ack (manual é mais seguro)
 		false,     // exclusive
 		false,     // no-local
 		false,     // no-wait
@@ -45,29 +45,34 @@ func (w *Worker) Start(queueName string) {
 
 	go func() {
 		for d := range msgs {
-			log.Printf("📥 Mensagem Recebida: %s", d.Body)
+			log.Printf("📥 [WORKER] Mensagem Recebida do RabbitMQ")
 
 			var payload ActivationPayload
 			if err := json.Unmarshal(d.Body, &payload); err != nil {
-				log.Printf("❌ Erro ao decodificar JSON: %s", err)
-				d.Nack(false, false) // Rejeita e não re-encaminha (mensagem podre)
+				log.Printf("❌ [WORKER] JSON Inválido: %s", err)
+				// Mensagem podre (malformada). Rejeita sem requeue para não travar a fila.
+				d.Nack(false, false)
 				continue
 			}
 
+			log.Printf("⚙️ [WORKER] Processando ativação para: %s (Provider: %s)", payload.Name, payload.Provider)
+
 			// Processamento Real
 			if err := w.processMessage(context.Background(), payload); err != nil {
-				log.Printf("❌ Erro ao processar ativação: %s", err)
-				// Se for erro temporário, poderia usar d.Nack(false, true) pra tentar de novo
-				// Aqui vamos rejeitar para não travar a fila no dev
+				log.Printf("❌ [WORKER] Erro na integração: %s", err)
+
+				// Estratégia de Retentativa:
+				// Se for erro de timeout/rede, idealmente faríamos d.Nack(false, true) para tentar de novo.
+				// Como estamos em dev/testes, vou rejeitar para limpar a fila.
 				d.Nack(false, false)
 			} else {
-				log.Printf("✅ Sucesso! Cliente %s integrado na %s.", payload.Name, payload.Provider)
-				d.Ack(false) // Confirma que processou
+				log.Printf("✅ [WORKER] Sucesso! Cliente %s integrado na %s.", payload.Name, payload.Provider)
+				d.Ack(false) // Confirma o sucesso e remove da fila
 			}
 		}
 	}()
 
-	log.Printf(" [*] Worker rodando e aguardando mensagens na fila %s", queueName)
+	log.Printf(" [*] Worker rodando e aguardando na fila '%s'", queueName)
 	<-forever
 }
 
@@ -75,16 +80,18 @@ func (w *Worker) processMessage(ctx context.Context, payload ActivationPayload) 
 	// Roteamento de Provedor
 	switch payload.Provider {
 	case "DOC24":
-		log.Println("🩺 Enviando para API da Doc24...")
+		log.Println("🩺 Enviando dados completos para API da Doc24...")
+		// Como o payload já tem CPF e Phone, o Client só repassa.
 		return w.DocClient.CreateBeneficiary(ctx, payload)
 
 	case "TEM":
 		log.Println("🏥 Enviando para API da TEM Saúde...")
 		// return w.TemClient.Create(ctx, payload)
-		return nil // TODO: Implementar TEM
+		return nil
 
 	default:
 		log.Printf("⚠️ Provedor desconhecido: %s. Apenas logando.", payload.Provider)
+		// Retornamos nil para dar ACK e tirar essa mensagem da fila, já que não sabemos tratar
 		return nil
 	}
 }

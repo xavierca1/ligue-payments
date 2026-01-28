@@ -24,6 +24,7 @@ type SubscriptionRepository interface {
 	Create(ctx context.Context, sub *Subscription) error
 	GetStatusByCustomerID(customerID string) (string, error)
 	UpdateStatus(customerID string, status string) error
+	FindLastByCustomerID(ctx context.Context, customerID string) (*Subscription, error)
 }
 
 // NewSubscription cria uma nova instância com ID e Timestamps

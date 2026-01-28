@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 )
@@ -47,6 +48,20 @@ func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.C
 
 }
 
+func (r *CustomerRepository) CheckDuplicity(ctx context.Context, email, cpf string) (bool, error) {
+	cleanCPF := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(cpf, ".", ""), "-", ""), " ", "")
+
+	query := `
+		SELECT COUNT(*) FROM customers 
+		WHERE email = $1 OR cpf_cnpj = $2
+	`
+	var count int
+	err := r.DB.QueryRowContext(ctx, query, email, cleanCPF).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
 func (r *CustomerRepository) FindByGatewayID(gatewayID string) (*entity.Customer, error) {
 	// Ajuste o nome da coluna 'gateway_id' se for diferente no seu banco
 	query := `

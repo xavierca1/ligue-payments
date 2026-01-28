@@ -35,6 +35,10 @@ type CreateCustomerInput struct {
 	CardMonth         string `json:"card_month"`
 	CardYear          string `json:"card_year"`
 	CardCVV           string `json:"card_cvv"`
+
+	TermsAccepted   bool   `json:"terms_accepted"`
+	TermsAcceptedAt string `json:"terms_accepted_at"` // Vem como string ISO do front
+	TermsVersion    string `json:"terms_version"`
 }
 
 type CreateCustomerOutput struct {

@@ -37,49 +37,40 @@ func main() {
 	defer rabbitMQ.Conn.Close()
 	defer rabbitMQ.Ch.Close()
 
-	// 1. Repositórios
+	// Repositories
 	customerRepo := database.NewCustomerRepository(db)
 	planRepo := database.NewPlanRepository(db)
 	subRepo := database.NewSubscriptionRepository(db)
 
-	// 2. Gateways e Adapters
+	// External Services
 	gateway := asaas.NewClient(os.Getenv("ASAAS_API_KEY"), os.Getenv("ASAAS_URL"))
 	producer := queue.NewProducer(rabbitMQ.Conn, rabbitMQ.Ch)
 	mailSender := mail.NewEmailSender(
 		os.Getenv("MAIL_HOST"), 587, os.Getenv("MAIL_USER"), os.Getenv("MAIL_PASS"),
 	)
-
-	// Doc24 Client (Agora compatível com a interface do Worker)
 	docClient := doc24.NewClient("liguemed", "J3xpZW50U2VjjkV0RG9jMjRNiOJlNDM=")
 
-	// 3. Worker (Consome a fila e chama Doc24)
-	worker := queue.NewWorker(rabbitMQ.Ch, docClient, customerRepo)
+	// Background Worker
+	worker := queue.NewWorker(rabbitMQ.Ch, docClient)
 	go worker.Start(queue.QueueName)
 
-	// 4. UseCases
-	// UseCase de Criação (Checkout)
+	// UseCases
 	createCustomerUC := usecase.NewCreateCustomerUseCase(
 		customerRepo, subRepo, planRepo, gateway, producer, mailSender,
 		os.Getenv("SUPABASE_STORAGE_URL"),
 	)
 
-	// UseCase de Ativação (Webhook) - Injeção corrigida aqui
 	activateSubUC := usecase.NewActivateSubscriptionUseCase(
-		subRepo,
-		customerRepo,
-		planRepo,
-		producer,
-		mailSender,
+		subRepo, customerRepo, planRepo, producer, mailSender,
 	)
 
-	// 5. Handlers
-	checkoutHandler := handlers.NewCheckoutHandler(createCustomerUC)
-	subHandler := handlers.NewSubscriptionHandler(subRepo)
-
-	// WebhookHandler agora recebe o UseCase, não os Repos
+	// Handlers
+	// Aqui o CustomerHandler recebe o subRepo para poder consultar o status do pagamento
+	customerHandler := handlers.NewCustomerHandler(createCustomerUC, subRepo)
 	webhookHandler := handlers.NewWebhookHandler(customerRepo, activateSubUC)
+	validationHandler := handlers.NewValidationHandler(customerRepo)
 
-	// 6. Router
+	// Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(cors.Handler(cors.Options{
@@ -87,11 +78,12 @@ func main() {
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 	}))
 
-	r.Post("/checkout", checkoutHandler.Handle)
-	r.Get("/subscription/status/{customerId}", subHandler.HandleGetStatus)
+	r.Post("/checkout", customerHandler.CreateCheckoutHandler)
+	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler) // Rota unificada
 	r.Post("/webhook", webhookHandler.Handle)
+	r.Post("/validate-user", validationHandler.Handle)
 
 	port := ":8080"
-	log.Printf("🔥 Server CorePay rodando na porta %s", port)
+	log.Printf(" Server CorePay rodando na porta %s", port)
 	http.ListenAndServe(port, r)
 }

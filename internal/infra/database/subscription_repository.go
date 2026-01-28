@@ -81,3 +81,41 @@ func (r *SubscriptionRepository) GetStatusByCustomerID(customerID string) (strin
 	}
 	return status, nil
 }
+func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, customerID string) (*entity.Subscription, error) {
+	query := `
+		SELECT 
+			id, 
+			customer_id, 
+			plan_id,      -- 👈 O culpado! Tem que estar aqui
+			product_id,   -- Importante também
+			amount, 
+			status, 
+			next_billing_date, 
+			created_at, 
+			updated_at
+		FROM subscriptions 
+		WHERE customer_id = $1 
+		ORDER BY created_at DESC 
+		LIMIT 1
+	`
+
+	var sub entity.Subscription
+
+	err := r.DB.QueryRowContext(ctx, query, customerID).Scan(
+		&sub.ID,
+		&sub.CustomerID,
+		&sub.PlanID, // 👈 E tem que ter o ponteiro aqui
+		&sub.ProductID,
+		&sub.Amount,
+		&sub.Status,
+		&sub.NextBillingDate,
+		&sub.CreatedAt,
+		&sub.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("assinatura não encontrada: %w", err)
+	}
+
+	return &sub, nil
+}
