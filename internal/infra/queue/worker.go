@@ -81,7 +81,6 @@ func (w *Worker) processMessage(ctx context.Context, payload ActivationPayload) 
 	switch payload.Provider {
 	case "DOC24":
 		log.Println("🩺 Enviando dados completos para API da Doc24...")
-		// Como o payload já tem CPF e Phone, o Client só repassa.
 		return w.DocClient.CreateBeneficiary(ctx, payload)
 
 	case "TEM":

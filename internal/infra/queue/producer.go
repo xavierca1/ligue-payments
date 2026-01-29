@@ -12,16 +12,21 @@ import (
 type ActivationPayload struct {
 	CustomerID string `json:"customer_id"`
 	PlanID     string `json:"plan_id"`
-	Provider   string `json:"provider"`
-	Name       string `json:"name"`
-	Email      string `json:"email"`
 
-	// 👇 Campos novos vitais para a Doc24/Integrações
-	Phone string `json:"phone"`
-	CPF   string `json:"cpf"`
+	ProviderPlanCode string `json:"provider_plan_code"`
+	// Campos de Controle
+	Provider string `json:"provider"` // <--- Adicione
+	Origin   string `json:"origin"`   // <--- Adicione
 
-	Origin string `json:"origin"`
+	// Dados do Cliente (Doc24)
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	CPF       string `json:"cpf"`
+	Phone     string `json:"phone"`
+	BirthDate string `json:"birth_date"` // <--- Importante para Doc24
+	Gender    string `json:"gender"`     // <--- Importante para Doc24
 }
+
 type QueueProducerInterface interface {
 	PublishActivation(ctx context.Context, payload ActivationPayload) error
 }

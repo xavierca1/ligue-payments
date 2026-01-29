@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/infra/queue"
@@ -36,6 +37,8 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 	if err != nil {
 		return fmt.Errorf("falha ao buscar dados do cliente: %w", err)
 	}
+
+	genderStr := strconv.Itoa(customer.Gender)
 
 	// 2. Buscar a Assinatura (AQUI ESTÁ A CORREÇÃO 🛡️)
 	// Precisamos da assinatura para saber QUAL É O PLANO REAL
@@ -70,7 +73,9 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 		Email:      customer.Email,
 		Origin:     "WEBHOOK_ASAAS",
 		Phone:      customer.Phone, // Adicionei Phone se tiver no payload
-		CPF:        customer.CPF,   // Adicionei CPF se tiver no payload
+		CPF:        customer.CPF,
+		BirthDate:  customer.BirthDate, // Certifique-se que o customer tem esse campo
+		Gender:     genderStr,          // Certifique-se que o customer tem esse campo
 	}
 
 	// 6. Publicar na Fila
