@@ -30,9 +30,10 @@ func NewActivateSubscriptionUseCase(
 }
 
 func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input ActivateSubscriptionInput) error {
-	log.Printf("🔄 Iniciando ativação para CustomerID: %s", input.CustomerID)
+	log.Printf(" Iniciando ativação para CustomerID: %s", input.CustomerID)
 
 	// 1. Buscar dados do Cliente (Precisamos do Nome e Email para o Payload)
+
 	customer, err := uc.CustomerRepo.FindByID(ctx, input.CustomerID)
 	if err != nil {
 		return fmt.Errorf("falha ao buscar dados do cliente: %w", err)
@@ -81,10 +82,10 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 	// 6. Publicar na Fila
 	if err := uc.Queue.PublishActivation(ctx, payload); err != nil {
 		// Loga erro crítico mas não falha o request HTTP do Asaas (já salvamos no banco)
-		log.Printf("⚠️ CRITICAL: Assinatura ativada no banco, mas falha ao publicar na fila: %v", err)
+		log.Printf(" CRITICAL: Assinatura ativada no banco, mas falha ao publicar na fila: %v", err)
 		return nil
 	}
 
-	log.Printf("🚀 Ativação enviada com sucesso para %s via %s", customer.Name, plan.Provider)
+	log.Printf(" Ativação enviada com sucesso para %s via %s", customer.Name, plan.Provider)
 	return nil
 }
