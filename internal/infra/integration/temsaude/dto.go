@@ -1,7 +1,7 @@
 package temsaude
 
 type TemAdesaoRequest struct {
-	// Campos de Identificação
+
 	CpfTitular     string `json:"cpfTitular"` // Geralmente igual ao CPF para titular
 	Cpf            string `json:"cpf"`
 	Nome           string `json:"Nome"`
@@ -31,5 +31,5 @@ type TemAdesaoRequest struct {
 type TemAdesaoResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
-	// Mapeie outros campos de retorno se houver
+
 }

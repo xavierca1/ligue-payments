@@ -37,27 +37,27 @@ func NewClient(clientID, clientSecret string) *Client {
 	}
 }
 
-// --- STRUCTS (Endpoint de Elegibilidade / Afiliados) ---
+
 
 type AffiliateInput struct {
-	// Dados Pessoais
+
 	Nombre          string `json:"nombre"`
 	Apellido        string `json:"apellido"`
 	Sexo            string `json:"sexo"`             // "M" ou "F"
 	FechaNacimiento string `json:"fecha_nacimiento"` // YYYY-MM-DD
 
-	// Documentos
+
 	IdentificacaoTrib string `json:"identificacion_tributaria"` // CPF
 	NroDocumento      string `json:"nro_documento"`             // CPF
 	NroDocTitular     string `json:"nro_documento_titular"`     // CPF
 
-	// Vínculo com o Plano
+
 	Plan       string `json:"plan"`       // Nome do plano (vem do banco)
 	Empresa    string `json:"empresa"`    // Nome da empresa na Doc24
 	Credencial string `json:"credencial"` // Usamos CPF
 	FechaAlta  string `json:"fecha_alta"` // Data de hoje
 
-	// Contato
+
 	TelefonoMovil string `json:"telefono_movil"`
 	Email         string `json:"email"`
 }
@@ -67,14 +67,14 @@ type EligibilityResponse struct {
 	Mensaje string `json:"mensaje"` // "OK"
 }
 
-// --- MÉTODOS ---
 
-// EnsureAuthenticated: Garante Token via Client Credentials
+
+
 func (c *Client) EnsureAuthenticated(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Se tem token válido, usa ele
+
 	if c.token != "" && time.Now().Add(30*time.Second).Before(c.tokenExpiry) {
 		return nil
 	}
@@ -100,7 +100,7 @@ func (c *Client) EnsureAuthenticated(ctx context.Context) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		// Lê o body para debug
+
 		var errorBody bytes.Buffer
 		errorBody.ReadFrom(resp.Body)
 		log.Printf("❌ [Doc24] Erro Auth: %s", errorBody.String())
@@ -127,14 +127,14 @@ func (c *Client) EnsureAuthenticated(ctx context.Context) error {
 	return nil
 }
 
-// CreateBeneficiary: Cria ou Atualiza via Elegibilidade (Upsert)
+
 func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPayload) error {
-	// 1. Auth
+
 	if err := c.EnsureAuthenticated(ctx); err != nil {
 		return err
 	}
 
-	// 2. Prepara Dados
+
 	parts := strings.SplitN(input.Name, " ", 2)
 	nome := parts[0]
 	sobrenome := ""
@@ -142,7 +142,7 @@ func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPa
 		sobrenome = parts[1]
 	}
 
-	// Sexo
+
 	sexo := "M"
 	if input.Gender == "0" || strings.ToUpper(input.Gender) == "F" {
 		sexo = "F"
@@ -157,7 +157,7 @@ func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPa
 
 	today := time.Now().Format("2006-01-02")
 
-	// 3. Monta Payload
+
 	payload := AffiliateInput{
 		Nombre:            nome,
 		Apellido:          sobrenome,
@@ -178,7 +178,7 @@ func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPa
 
 	jsonBody, _ := json.Marshal(payload)
 
-	// 4. Request
+
 	url := BaseURL + "/portal/elegibilidad"
 	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
@@ -194,18 +194,24 @@ func (c *Client) CreateBeneficiary(ctx context.Context, input queue.ActivationPa
 	}
 	defer resp.Body.Close()
 
-	// 5. Validação
+
 	if resp.StatusCode >= 400 {
 		var errBody bytes.Buffer
 		errBody.ReadFrom(resp.Body)
-		// Loga o erro exato que a Doc24 devolveu
+
 		return fmt.Errorf("erro api doc24 (%d): %s", resp.StatusCode, errBody.String())
 	}
 
-	// Tenta decodar resposta (opcional, só pra logar bonito)
+
 	var result EligibilityResponse
 	json.NewDecoder(resp.Body).Decode(&result)
 
-	log.Printf("🚀 [Doc24] Sucesso! Paciente %s vinculado ao plano '%s'", input.Name, planName)
+	log.Printf("🚀 [Doc24] Sucesso! Paciente %s vinculado ao plano '%s' (ID: %s)", input.Name, planName, input.CPF)
 	return nil
+}
+
+
+func (c *Client) GetBeneficiaryID(cpf string) string {
+
+	return cpf
 }

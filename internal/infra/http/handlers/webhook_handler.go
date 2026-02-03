@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
@@ -11,12 +16,12 @@ import (
 
 type WebhookHandler struct {
 	CustomerRepo  entity.CustomerRepositoryInterface
-	ActivateSubUC *usecase.ActivateSubscriptionUseCase
+	ActivateSubUC usecase.ActivateSubscriptionInterface
 }
 
 func NewWebhookHandler(
 	customerRepo entity.CustomerRepositoryInterface,
-	activateSubUC *usecase.ActivateSubscriptionUseCase,
+	activateSubUC usecase.ActivateSubscriptionInterface,
 ) *WebhookHandler {
 	return &WebhookHandler{
 		CustomerRepo:  customerRepo,
@@ -25,6 +30,32 @@ func NewWebhookHandler(
 }
 
 func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
+
+	signature := r.Header.Get("X-Asaas-Signature")
+	if signature == "" {
+		log.Println("❌ Webhook: Missing X-Asaas-Signature header")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"invalid_signature"}`))
+		return
+	}
+
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("❌ Webhook: Failed to read body: %v", err)
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+
+	if !verifyWebhookSignature(string(body), signature) {
+		log.Println("❌ Webhook: Invalid signature - possible forgery!")
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":"invalid_signature"}`))
+		return
+	}
+
+
 	var event struct {
 		Event   string `json:"event"`
 		Payment struct {
@@ -33,20 +64,24 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		} `json:"payment"`
 	}
 
-	if err := json.NewDecoder(r.Body).Decode(&event); err != nil {
-		http.Error(w, "Bad JSON", 400)
+	if err := json.Unmarshal(body, &event); err != nil {
+
+		log.Printf("⚠️ Webhook: Invalid JSON: %v", err)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
+
 	if event.Event != "PAYMENT_RECEIVED" && event.Event != "PAYMENT_CONFIRMED" {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(event.Payment.Customer)
 	if err != nil {
-		log.Printf("❌ Webhook: Cliente não encontrado (GatewayID: %s): %v", event.Payment.Customer, err)
-		w.WriteHeader(200) // 200 pro Asaas parar de tentar
+		log.Printf("❌ Webhook: Customer not found (GatewayID: %s): %v", event.Payment.Customer, err)
+
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -56,10 +91,32 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.ActivateSubUC.Execute(r.Context(), input); err != nil {
-		log.Printf(" Erro na ativação: %v", err)
-		w.WriteHeader(500)
+		log.Printf("❌ Webhook: Activation error: %v", err)
+
+		writeErrorResponse(w, http.StatusInternalServerError, "ACTIVATION_ERROR", "Erro ao ativar assinatura")
 		return
 	}
 
-	w.WriteHeader(200)
+	log.Printf("✅ Webhook: Subscription activated for customer %s", localCustomer.ID)
+	w.WriteHeader(http.StatusOK)
+}
+
+
+
+func verifyWebhookSignature(body, signature string) bool {
+	webhookSecret := os.Getenv("ASAAS_WEBHOOK_SECRET")
+	if webhookSecret == "" {
+		log.Println("⚠️ ASAAS_WEBHOOK_SECRET não configurado")
+		return false
+	}
+
+
+	hash := sha256.Sum256([]byte(body + webhookSecret))
+	expectedSig := fmt.Sprintf("%x", hash)
+
+
+	return subtle.ConstantTimeCompare(
+		[]byte(signature),
+		[]byte(expectedSig),
+	) == 1
 }

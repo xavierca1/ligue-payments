@@ -5,16 +5,16 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/xavierca1/ligue-payments/internal/infra/database" // Importar o pacote database concreto ou a interface
+	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
 type CustomerHandler struct {
 	CreateCustomerUC *usecase.CreateCustomerUseCase
-	SubRepo          *database.SubscriptionRepository
+	SubRepo          entity.SubscriptionRepository
 }
 
-func NewCustomerHandler(uc *usecase.CreateCustomerUseCase, subRepo *database.SubscriptionRepository) *CustomerHandler {
+func NewCustomerHandler(uc *usecase.CreateCustomerUseCase, subRepo entity.SubscriptionRepository) *CustomerHandler {
 	return &CustomerHandler{
 		CreateCustomerUC: uc,
 		SubRepo:          subRepo,
@@ -25,13 +25,19 @@ func (h *CustomerHandler) CreateCheckoutHandler(w http.ResponseWriter, r *http.R
 	var input usecase.CreateCustomerInput
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "JSON inválido: "+err.Error(), http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido: "+err.Error())
 		return
 	}
 
 	output, err := h.CreateCustomerUC.Execute(r.Context(), input)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+
+		if usecase.IsDomainError(err) {
+			writeErrorResponse(w, http.StatusBadRequest, "VALIDATION_ERROR", err.Error())
+			return
+		}
+
+		writeErrorResponse(w, http.StatusInternalServerError, "INTERNAL_ERROR", "Erro ao processar cadastro")
 		return
 	}
 
@@ -40,24 +46,35 @@ func (h *CustomerHandler) CreateCheckoutHandler(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(output)
 }
 
-// GetStatusHandler (GET /customers/{id}/status)
-// AGORA SIM: Consulta a tabela subscriptions
+
 func (h *CustomerHandler) GetStatusHandler(w http.ResponseWriter, r *http.Request) {
 	customerID := chi.URLParam(r, "id")
 	if customerID == "" {
-		http.Error(w, "ID is required", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "MISSING_ID", "Customer ID is required")
 		return
 	}
 
-	// Busca o status da ÚLTIMA assinatura desse cliente
+
 	status, err := h.SubRepo.GetStatusByCustomerID(customerID)
 	if err != nil {
-		// Se não achou assinatura ou deu erro, retorna PENDING
+
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]string{"status": "PENDING"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": status})
+}
+
+
+func writeErrorResponse(w http.ResponseWriter, statusCode int, code string, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	json.NewEncoder(w).Encode(map[string]string{
+		"error":   code,
+		"message": message,
+	})
 }

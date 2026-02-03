@@ -13,9 +13,10 @@ type Subscription struct {
 	PlanID          string    `json:"plan_id"`
 	ProductID       string    `json:"product_id"`
 	Amount          int       `json:"amount"`   // Em centavos, como o Asaas gosta
-	Status          string    `json:"status"`   // PENDING, ACTIVE, etc
+	Status          string    `json:"status"`   // PENDING, ACTIVE, EXPIRED, etc
 	Interval        string    `json:"interval"` // MONTHLY, YEARLY
 	NextBillingDate time.Time `json:"next_billing_date"`
+	PaymentMethod   string    `json:"payment_method"` // PIX, CREDIT_CARD, BOLETO
 	PaymentMethodID string    `json:"payment_method_id"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -27,7 +28,7 @@ type SubscriptionRepository interface {
 	FindLastByCustomerID(ctx context.Context, customerID string) (*Subscription, error)
 }
 
-// NewSubscription cria uma nova instância com ID e Timestamps
+
 func NewSubscription(customerID, planID string, amount int) *Subscription {
 	return &Subscription{
 		ID:         uuid.New().String(),

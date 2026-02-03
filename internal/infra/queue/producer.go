@@ -8,17 +8,17 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-// Define o formato da mensagem que vai viajar na fila
+
 type ActivationPayload struct {
 	CustomerID string `json:"customer_id"`
 	PlanID     string `json:"plan_id"`
 
 	ProviderPlanCode string `json:"provider_plan_code"`
-	// Campos de Controle
+
 	Provider string `json:"provider"` // <--- Adicione
 	Origin   string `json:"origin"`   // <--- Adicione
 
-	// Dados do Cliente (Doc24)
+
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	CPF       string `json:"cpf"`
@@ -35,7 +35,7 @@ type RabbitMQProducer struct {
 	Ch   *amqp.Channel
 }
 
-// NewProducer reaproveita a conexão que já abrimos no main.go
+
 func NewProducer(conn *amqp.Connection, ch *amqp.Channel) *RabbitMQProducer {
 	return &RabbitMQProducer{
 		Conn: conn,
@@ -44,13 +44,13 @@ func NewProducer(conn *amqp.Connection, ch *amqp.Channel) *RabbitMQProducer {
 }
 
 func (p *RabbitMQProducer) PublishActivation(ctx context.Context, payload ActivationPayload) error {
-	// 1. Transforma Struct em JSON (Bytes)
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("erro ao converter payload: %v", err)
 	}
 
-	// 2. Publica na Exchange "ex.checkout" com a chave "k.activation"
+
 	err = p.Ch.PublishWithContext(ctx,
 		ExchangeName, // ex.checkout
 		RoutingKey,   // k.activation

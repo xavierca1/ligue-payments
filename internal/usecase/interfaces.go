@@ -79,6 +79,14 @@ type EmailService interface {
 	SendWelcome(to, name, productName, pdfLink string) error
 }
 
+type WhatsAppService interface {
+	SendWelcome(phone, name, planName, templateID string) error
+}
+
+type ActivateSubscriptionInterface interface {
+	Execute(ctx context.Context, input ActivateSubscriptionInput) error
+}
+
 type CreateCustomerUseCase struct {
 	Repo             CustomerRepositoryInterface
 	SubRepo          SubscriptionRepository
@@ -87,17 +95,18 @@ type CreateCustomerUseCase struct {
 	BenefitService   BenefitProvider
 	Queue            QueueProducerInterface
 	EmailService     EmailService
+	WhatsAppService  WhatsAppService
 	WelcomeBucketURL string
 }
 
-// ActivateSubscriptionUseCase orquestra a liberação do acesso
+
 
 type ActivateSubscriptionInput struct {
 	CustomerID string
 	GatewayID  string
 }
 
-// Struct ATUALIZADA com todos os repositórios necessários
+
 type ActivateSubscriptionUseCase struct {
 	SubRepo      entity.SubscriptionRepository
 	CustomerRepo entity.CustomerRepositoryInterface // 👈 ADICIONADO: Pra pegar Nome/Email

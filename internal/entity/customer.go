@@ -6,10 +6,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	// IMPORTANTE: NÃO adicione imports de usecase ou infra aqui!
+
 )
 
-// Value Object: Address
+
 type Address struct {
 	Street     string `json:"street"`
 	Number     string `json:"number"`
@@ -20,14 +20,14 @@ type Address struct {
 	ZipCode    string `json:"zip_code"`
 }
 
-// Entidade: Customer
+
 type Customer struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 	CPF   string `json:"cpf"`
 
-	// Novos Campos Obrigatórios
+
 	Phone     string  `json:"phone"`
 	BirthDate string  `json:"birth_date"`
 	Gender    int     `json:"gender"`
@@ -36,14 +36,14 @@ type Customer struct {
 
 	ProductID string `json:"product_id"`
 
-	// IDs externos
+
 	GatewayID      string    `json:"gateway_id"`
 	SubscriptionID string    `json:"subscription_id"`
 	ProviderID     string    `json:"provider_id"`
 	OnixCode       string    `json:"onix_code"`
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 
 	TermsAccepted   bool      `json:"terms_accepted"`
 	TermsAcceptedAt time.Time `json:"terms_accepted_at"`
@@ -94,6 +94,9 @@ type CustomerRepositoryInterface interface {
 	Create(ctx context.Context, customer *Customer) error
 	FindByGatewayID(id string) (*Customer, error)
 	FindByID(ctx context.Context, id string) (*Customer, error)
+	CheckDuplicity(ctx context.Context, email, cpf string) (bool, error)
+	Delete(ctx context.Context, id string) error
+	UpdateProviderID(ctx context.Context, customerID, providerID string) error
 }
 type PlanRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*Plan, error)

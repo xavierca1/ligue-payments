@@ -31,16 +31,18 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 			next_billing_date, 
 			created_at, 
 			updated_at,
-            payment_method_id  -- $10 (Pode ser Null)
+			payment_method,    -- $10
+            payment_method_id  -- $11 (Pode ser Null)
 		) VALUES (
 			$1, 
             $2::uuid,          -- 🆕 Forçamos o UUID aqui
-            $3, $4, $5, $6, $7, $8, $9, 
-            NULLIF($10, '')::uuid
+            $3, $4, $5, $6, $7, $8, $9, $10,
+            NULLIF($11, '')::uuid
 		)
 	`
 
-	fmt.Printf(" [REPO SUBSCRIPTION] Salvando ID=%s | ProductID=%s\n", sub.ID, pid)
+	fmt.Printf(" [REPO SUBSCRIPTION] Salvando ID=%s | ProductID=%s | PaymentMethod=%s\n",
+		sub.ID, pid, sub.PaymentMethod)
 
 	_, err := r.DB.ExecContext(
 		ctx,
@@ -54,8 +56,8 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 		sub.NextBillingDate, // $7
 		sub.CreatedAt,       // $8
 		sub.UpdatedAt,       // $9
-
-		"",
+		sub.PaymentMethod,   // $10
+		"",                  // $11
 	)
 
 	if err != nil {
@@ -66,7 +68,7 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 }
 
 func (r *SubscriptionRepository) UpdateStatus(id string, status string) error {
-	// Atualiza status baseado no CustomerID
+
 	query := `UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE customer_id = $2`
 	_, err := r.DB.Exec(query, status, id)
 	return err

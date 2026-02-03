@@ -50,7 +50,7 @@ func (c *Client) post(endpoint string, body interface{}) ([]byte, error) {
 		return nil, fmt.Errorf("erro ao ler resposta: %w", err)
 	}
 
-	// 6. Valida se deu bom (200-299)
+
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("erro na api asaas (%d): %s", resp.StatusCode, string(respBytes))
 	}
@@ -199,13 +199,15 @@ func (c *Client) SubscribePix(input SubscribePixInput) (string, *PixOutput, erro
 
 	loc, _ := time.LoadLocation("America/Sao_Paulo")
 	nowBrazil := time.Now().In(loc)
+	expirationDate := nowBrazil.Add(30 * time.Minute) // PIX expira em 30 min
 
 	reqBody := map[string]interface{}{
 		"customer":    input.CustomerID,
 		"billingType": "PIX",
 		"value":       priceFloat,
 		"cycle":       "MONTHLY",
-		"nextDueDate": nowBrazil.Format("2006-01-02"), // Vence hoje
+		"nextDueDate": nowBrazil.Format("2006-01-02"),      // Vence hoje
+		"dueDate":     expirationDate.Format("2006-01-02"), // Data de expiração
 		"description": "Plano Ligue - Assinatura",
 	}
 	respBody, err := c.post("/subscriptions", reqBody)

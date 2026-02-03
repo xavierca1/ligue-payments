@@ -1,23 +1,76 @@
 version: '3.8'
 
 services:
-  # 🐘 O Banco de Dados (Postgres)
+  api:
+    build: .
+    container_name: ligue-api
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgresql://admin:password@postgres:5432/ligue_payments?sslmode=disable
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=guest
+      - RABBITMQ_PASS=guest
+      - ASAAS_API_KEY=${ASAAS_API_KEY}
+      - ASAAS_URL=https://api.asaas.com/v3
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_USER=${MAIL_USER}
+      - MAIL_PASS=${MAIL_PASS}
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - ligue-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   postgres:
     image: postgres:15-alpine
     container_name: ligue_postgres
     restart: always
     ports:
-      - "5432:5432" # Porta Externa : Porta Interna
+      - "5432:5432"
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
       POSTGRES_DB: ligue_payments
     volumes:
-      - postgres_data:/var/lib/postgresql/data # Persistência (não perde dados se reiniciar)
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - ligue-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d ligue_payments"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management-alpine
+    container_name: ligue-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - ligue-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
       interval: 5s
       timeout: 5s
       retries: 5

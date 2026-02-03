@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/xavierca1/ligue-payments/internal/infra/database"
+	"github.com/xavierca1/ligue-payments/internal/entity"
 )
 
 type ValidationHandler struct {
-	Repo *database.CustomerRepository
+	Repo entity.CustomerRepositoryInterface
 }
 
-func NewValidationHandler(repo *database.CustomerRepository) *ValidationHandler {
+func NewValidationHandler(repo entity.CustomerRepositoryInterface) *ValidationHandler {
 	return &ValidationHandler{Repo: repo}
 }
 
@@ -22,25 +22,33 @@ func (h *ValidationHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		http.Error(w, "JSON inválido", http.StatusBadRequest)
+		writeErrorResponse(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido")
+		return
+	}
+
+	if input.Email == "" || input.CPF == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "MISSING_FIELDS", "email and cpf are required")
 		return
 	}
 
 	exists, err := h.Repo.CheckDuplicity(r.Context(), input.Email, input.CPF)
 	if err != nil {
-		http.Error(w, "Erro ao validar duplicidade", http.StatusInternalServerError)
+		writeErrorResponse(w, http.StatusInternalServerError, "DATABASE_ERROR", "Erro ao validar duplicidade")
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	if exists {
-		// Retorna 409 Conflict se já existir
+
 		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(map[string]string{"error": "user_exists"})
+		json.NewEncoder(w).Encode(map[string]string{
+			"error":   "user_exists",
+			"message": "Um usuário com este email ou CPF já existe",
+		})
 		return
 	}
 
-	// Retorna 200 OK se estiver livre
+
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

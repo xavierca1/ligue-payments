@@ -63,14 +63,14 @@ func (r *CustomerRepository) CheckDuplicity(ctx context.Context, email, cpf stri
 	return count > 0, nil
 }
 func (r *CustomerRepository) FindByGatewayID(gatewayID string) (*entity.Customer, error) {
-	// Ajuste o nome da coluna 'gateway_id' se for diferente no seu banco
+
 	query := `
         SELECT id, name, email, cpf_cnpj, plan_id, gateway_id
         FROM customers 
         WHERE gateway_id = $1`
 
 	var c entity.Customer
-	// Dica: Certifique-se que sua struct Customer tem o campo PlanID mapeado
+
 	err := r.DB.QueryRow(query, gatewayID).Scan(
 		&c.ID,
 		&c.Name,
@@ -163,5 +163,15 @@ func (r *CustomerRepository) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("erro ao deletar cliente %s: %w", id, err)
 	}
 
+	return nil
+}
+
+
+func (r *CustomerRepository) UpdateProviderID(ctx context.Context, customerID, providerID string) error {
+	query := `UPDATE customers SET provider_id = $1, updated_at = NOW() WHERE id = $2`
+	_, err := r.DB.ExecContext(ctx, query, providerID, customerID)
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar provider_id: %w", err)
+	}
 	return nil
 }

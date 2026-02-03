@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"net/http"
@@ -16,8 +17,10 @@ import (
 	"github.com/xavierca1/ligue-payments/internal/infra/http/handlers"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/doc24"
+	"github.com/xavierca1/ligue-payments/internal/infra/integration/kommo"
 	"github.com/xavierca1/ligue-payments/internal/infra/mail"
 	"github.com/xavierca1/ligue-payments/internal/infra/queue"
+	"github.com/xavierca1/ligue-payments/internal/infra/worker"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
@@ -41,6 +44,7 @@ func main() {
 	customerRepo := database.NewCustomerRepository(db)
 	planRepo := database.NewPlanRepository(db)
 	subRepo := database.NewSubscriptionRepository(db)
+	leadRepo := &database.LeadRepository{DB: db}
 
 	// External Services
 	gateway := asaas.NewClient(os.Getenv("ASAAS_API_KEY"), os.Getenv("ASAAS_URL"))
@@ -48,15 +52,22 @@ func main() {
 	mailSender := mail.NewEmailSender(
 		os.Getenv("MAIL_HOST"), 587, os.Getenv("MAIL_USER"), os.Getenv("MAIL_PASS"),
 	)
+	kommoClient := kommo.NewClient()
+	whatsappSender := mail.NewWhatsAppSender(kommoClient)
 	docClient := doc24.NewClient("liguemed", "J3xpZW50U2VjjkV0RG9jMjRNiOJlNDM=")
 
-	// Background Worker
-	worker := queue.NewWorker(rabbitMQ.Ch, docClient)
-	go worker.Start(queue.QueueName)
+	// Background Workers
+	queueWorker := queue.NewWorker(rabbitMQ.Ch, docClient, customerRepo)
+	go queueWorker.Start(queue.QueueName)
+
+	// Worker de Expiração de PIX (30 min)
+	pixWorker := worker.NewPixExpirationWorker(db)
+	ctx := context.Background()
+	go pixWorker.Start(ctx)
 
 	// UseCases
 	createCustomerUC := usecase.NewCreateCustomerUseCase(
-		customerRepo, subRepo, planRepo, gateway, producer, mailSender,
+		customerRepo, subRepo, planRepo, gateway, producer, mailSender, whatsappSender,
 		os.Getenv("SUPABASE_STORAGE_URL"),
 	)
 
@@ -65,10 +76,10 @@ func main() {
 	)
 
 	// Handlers
-	// Aqui o CustomerHandler recebe o subRepo para poder consultar o status do pagamento
 	customerHandler := handlers.NewCustomerHandler(createCustomerUC, subRepo)
 	webhookHandler := handlers.NewWebhookHandler(customerRepo, activateSubUC)
 	validationHandler := handlers.NewValidationHandler(customerRepo)
+	leadHandler := handlers.NewLeadHandler(leadRepo)
 
 	// Router
 	r := chi.NewRouter()
@@ -79,11 +90,30 @@ func main() {
 	}))
 
 	r.Post("/checkout", customerHandler.CreateCheckoutHandler)
-	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler) // Rota unificada
+	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler)
 	r.Post("/webhook", webhookHandler.Handle)
 	r.Post("/validate-user", validationHandler.Handle)
+	r.Post("/leads/capture", leadHandler.CaptureLead)
+
+	// Health checks
+	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"healthy"}`))
+	})
+	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
+		// Verifica se banco de dados está acessível
+		if err := db.Ping(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"unhealthy","reason":"database"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`))
+	})
 
 	port := ":8080"
-	log.Printf(" Server CorePay rodando na porta %s", port)
+	log.Printf("🚀 Server CorePay rodando na porta %s", port)
 	http.ListenAndServe(port, r)
 }

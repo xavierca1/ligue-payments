@@ -7,7 +7,7 @@ import (
 )
 
 func mapToDoc24(c *entity.Customer) CreateBeneficiaryInput {
-	// 1. Quebra o nome completo em Nome + Sobrenome
+
 	parts := strings.SplitN(c.Name, " ", 2)
 	sobrenome := ""
 	if len(parts) > 1 {
@@ -16,7 +16,7 @@ func mapToDoc24(c *entity.Customer) CreateBeneficiaryInput {
 		sobrenome = parts[0] // Fallback se o cara só tiver um nome
 	}
 
-	// 2. Traduz o Gênero
+
 	genero := "O" // Outros/Default
 	if c.Gender == 1 {
 		genero = "M"
@@ -25,8 +25,8 @@ func mapToDoc24(c *entity.Customer) CreateBeneficiaryInput {
 		genero = "F"
 	}
 
-	// 3. Formata Data (Assume que no banco já está YYYY-MM-DD ou formata aqui)
-	// Se c.BirthDate for string "YYYY-MM-DD", passa direto.
+
+
 
 	return CreateBeneficiaryInput{
 		Nombre:               parts[0],
