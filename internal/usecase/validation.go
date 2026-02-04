@@ -8,7 +8,6 @@ import (
 	"time"
 )
 
-
 type ValidationError struct {
 	Field   string
 	Message string
@@ -18,10 +17,8 @@ func (e ValidationError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Field, e.Message)
 }
 
-
 func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 	var errors []ValidationError
-
 
 	if strings.TrimSpace(input.Name) == "" {
 		errors = append(errors, ValidationError{"name", "is required"})
@@ -31,13 +28,11 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"name", "must not exceed 200 characters"})
 	}
 
-
 	if strings.TrimSpace(input.Email) == "" {
 		errors = append(errors, ValidationError{"email", "is required"})
 	} else if _, err := mail.ParseAddress(input.Email); err != nil {
 		errors = append(errors, ValidationError{"email", "is invalid"})
 	}
-
 
 	if input.CPF == "" {
 		errors = append(errors, ValidationError{"cpf", "is required"})
@@ -45,13 +40,11 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"cpf", "is invalid"})
 	}
 
-
 	if strings.TrimSpace(input.Phone) == "" {
 		errors = append(errors, ValidationError{"phone", "is required"})
 	} else if !isValidPhoneNumber(input.Phone) {
 		errors = append(errors, ValidationError{"phone", "must be a valid phone number"})
 	}
-
 
 	if strings.TrimSpace(input.BirthDate) == "" {
 		errors = append(errors, ValidationError{"birth_date", "is required"})
@@ -61,18 +54,9 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"birth_date", "customer must be at least 18 years old"})
 	}
 
-
-	if input.Gender == "" {
-		errors = append(errors, ValidationError{"gender", "is required"})
-	} else if !isValidGender(input.Gender) {
-		errors = append(errors, ValidationError{"gender", "must be 1 (M), 2 (F), or 3 (Other)"})
-	}
-
-
 	if strings.TrimSpace(input.PlanID) == "" {
 		errors = append(errors, ValidationError{"plan_id", "is required"})
 	}
-
 
 	if strings.TrimSpace(input.Street) == "" {
 		errors = append(errors, ValidationError{"street", "is required"})
@@ -93,13 +77,11 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"zip_code", "must be a valid zip code (XXXXX-XXX)"})
 	}
 
-
 	if input.PaymentMethod == "" {
 		errors = append(errors, ValidationError{"payment_method", "is required"})
 	} else if input.PaymentMethod != "PIX" && input.PaymentMethod != "CREDIT_CARD" {
 		errors = append(errors, ValidationError{"payment_method", "must be PIX or CREDIT_CARD"})
 	}
-
 
 	if input.PaymentMethod == "CREDIT_CARD" {
 		if input.CardHolder == "" {
@@ -127,7 +109,6 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		}
 	}
 
-
 	if !input.TermsAccepted {
 		errors = append(errors, ValidationError{"terms_accepted", "must be accepted"})
 	}
@@ -137,24 +118,16 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"terms_accepted_at", "must be a valid ISO8601 datetime"})
 	}
 
-
-	if strings.TrimSpace(input.OnixCode) == "" {
-		errors = append(errors, ValidationError{"onix_code", "is required"})
-	}
-
 	return errors
 }
-
 
 func isValidCPF(cpf string) bool {
 
 	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(cpf, "")
 
-
 	if len(cleaned) != 11 {
 		return false
 	}
-
 
 	firstDigit := string(cleaned[0])
 	allEqual := true
@@ -171,13 +144,11 @@ func isValidCPF(cpf string) bool {
 	return true
 }
 
-
 func isValidPhoneNumber(phone string) bool {
 	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(phone, "")
 
 	return len(cleaned) >= 10 && len(cleaned) <= 11
 }
-
 
 func isValidDate(dateStr string) bool {
 
@@ -195,7 +166,6 @@ func isValidDate(dateStr string) bool {
 	return false
 }
 
-
 func isMinor(birthDate string) bool {
 	t, err := time.Parse("2006-01-02", birthDate)
 	if err != nil {
@@ -208,16 +178,15 @@ func isMinor(birthDate string) bool {
 	return age < 18
 }
 
-
 func isValidGender(gender string) bool {
-	return gender == "1" || gender == "2" || gender == "3"
+	g := strings.ToUpper(strings.TrimSpace(gender))
+	return g == "1" || g == "2" || g == "3" || g == "M" || g == "F" || g == "OTHER"
 }
-
 
 func isValidZipCode(zipcode string) bool {
-	return regexp.MustCompile(`^\d{5}-\d{3}$`).MatchString(zipcode)
+	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(zipcode, "")
+	return len(cleaned) == 8
 }
-
 
 func isValidCardNumber(cardNumber string) bool {
 	cleaned := regexp.MustCompile(`\D`).ReplaceAllString(cardNumber, "")
@@ -226,7 +195,6 @@ func isValidCardNumber(cardNumber string) bool {
 	}
 	return luhnCheck(cleaned)
 }
-
 
 func luhnCheck(num string) bool {
 	sum := 0
@@ -249,17 +217,14 @@ func luhnCheck(num string) bool {
 	return sum%10 == 0
 }
 
-
 func isValidMonth(month string) bool {
 	return regexp.MustCompile(`^(0[1-9]|1[0-2])$`).MatchString(month)
 }
-
 
 func isValidYear(year string) bool {
 	if !regexp.MustCompile(`^\d{2}(\d{2})?$`).MatchString(year) {
 		return false
 	}
-
 
 	fullYear := year
 	if len(year) == 2 {
@@ -270,7 +235,6 @@ func isValidYear(year string) bool {
 	fmt.Sscanf(fullYear, "%d", &yearInt)
 	return yearInt >= time.Now().Year()
 }
-
 
 func isValidCVV(cvv string) bool {
 	return regexp.MustCompile(`^\d{3,4}$`).MatchString(cvv)

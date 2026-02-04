@@ -29,7 +29,6 @@ type CreateCustomerInput struct {
 	State             string `json:"state"`
 	ZipCode           string `json:"zip_code"`
 	ExternalReference string `json:"externalReference,omitempty"`
-	OnixCode          string `json:"onix_code"`
 	CardHolder        string `json:"card_holder"`
 	CardNumber        string `json:"card_number"`
 	CardMonth         string `json:"card_month"`
@@ -79,8 +78,8 @@ type EmailService interface {
 	SendWelcome(to, name, productName, pdfLink string) error
 }
 
-type WhatsAppService interface {
-	SendWelcome(phone, name, planName, templateID string) error
+type KommoService interface {
+	CreateLead(customerName, phone, email, planName string, price int) (int, error)
 }
 
 type ActivateSubscriptionInterface interface {
@@ -95,22 +94,20 @@ type CreateCustomerUseCase struct {
 	BenefitService   BenefitProvider
 	Queue            QueueProducerInterface
 	EmailService     EmailService
-	WhatsAppService  WhatsAppService
+	KommoService     KommoService
 	WelcomeBucketURL string
 }
-
-
 
 type ActivateSubscriptionInput struct {
 	CustomerID string
 	GatewayID  string
 }
 
-
 type ActivateSubscriptionUseCase struct {
 	SubRepo      entity.SubscriptionRepository
-	CustomerRepo entity.CustomerRepositoryInterface // 👈 ADICIONADO: Pra pegar Nome/Email
-	PlanRepo     entity.PlanRepositoryInterface     // 👈 ADICIONADO: Pra pegar o Provider
+	CustomerRepo entity.CustomerRepositoryInterface
+	PlanRepo     entity.PlanRepositoryInterface
 	Queue        queue.QueueProducerInterface
 	EmailService EmailService
+	KommoService KommoService
 }

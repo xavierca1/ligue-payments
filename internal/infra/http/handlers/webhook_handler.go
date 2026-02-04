@@ -31,15 +31,6 @@ func NewWebhookHandler(
 
 func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
-	signature := r.Header.Get("X-Asaas-Signature")
-	if signature == "" {
-		log.Println("❌ Webhook: Missing X-Asaas-Signature header")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"invalid_signature"}`))
-		return
-	}
-
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		log.Printf("❌ Webhook: Failed to read body: %v", err)
@@ -47,14 +38,13 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
+	// Verificar assinatura do webhook
+	signature := r.Header.Get("X-Asaas-Signature")
 	if !verifyWebhookSignature(string(body), signature) {
-		log.Println("❌ Webhook: Invalid signature - possible forgery!")
-		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"invalid_signature"}`))
+		log.Printf("❌ Webhook: Invalid signature")
+		writeErrorResponse(w, http.StatusUnauthorized, "INVALID_SIGNATURE", "invalid_signature")
 		return
 	}
-
 
 	var event struct {
 		Event   string `json:"event"`
@@ -70,7 +60,6 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-
 
 	if event.Event != "PAYMENT_RECEIVED" && event.Event != "PAYMENT_CONFIRMED" {
 		w.WriteHeader(http.StatusOK)
@@ -101,8 +90,6 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-
-
 func verifyWebhookSignature(body, signature string) bool {
 	webhookSecret := os.Getenv("ASAAS_WEBHOOK_SECRET")
 	if webhookSecret == "" {
@@ -110,10 +97,8 @@ func verifyWebhookSignature(body, signature string) bool {
 		return false
 	}
 
-
 	hash := sha256.Sum256([]byte(body + webhookSecret))
 	expectedSig := fmt.Sprintf("%x", hash)
-
 
 	return subtle.ConstantTimeCompare(
 		[]byte(signature),

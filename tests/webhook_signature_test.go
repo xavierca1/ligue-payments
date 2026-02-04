@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -81,9 +82,15 @@ func TestWebhookSignatureVerification(t *testing.T) {
 	t.Run("Invalid Signature", func(t *testing.T) {
 		payload := map[string]interface{}{
 			"event": "PAYMENT_RECEIVED",
+			"payment": map[string]string{
+				"customer": "",
+			},
 		}
 
 		body, _ := json.Marshal(payload)
+
+		// Adicionar mock para FindByGatewayID com string vazia
+		mockCustomerRepo.On("FindByGatewayID", "").Return(nil, errors.New("not found"))
 
 		req := httptest.NewRequest("POST", "/webhook", bytes.NewReader(body))
 		req.Header.Set("X-Asaas-Signature", "invalid-abc123")

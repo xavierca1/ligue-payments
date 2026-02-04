@@ -8,65 +8,101 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 )
 
 type Client struct {
-	accountID string
-	apiToken  string
-	baseURL   string
+	apiToken string
+	baseURL  string
 }
 
 func NewClient() *Client {
 	return &Client{
-		accountID: os.Getenv("KOMMO_ACCOUNT_ID"),
-		apiToken:  os.Getenv("KOMMO_API_TOKEN"),
-		baseURL:   "https://api.amocrm.com/v4",
+		apiToken: os.Getenv("KOMMO_API_TOKEN"),
+		baseURL:  "https://liguemedicina.kommo.com/api/v4",
 	}
 }
 
-func (c *Client) SendWhatsAppMessage(input SendWhatsAppInput) error {
-	if c.accountID == "" || c.apiToken == "" {
-		log.Println("⚠️ Kommo: ACCOUNT_ID ou API_TOKEN não configurados")
-		return fmt.Errorf("kommo não configurado")
+func (c *Client) CreateLead(input CreateLeadInput) (int, error) {
+	if c.apiToken == "" {
+		log.Println("⚠️ Kommo: API_TOKEN não configurado")
+		return 0, fmt.Errorf("kommo não configurado")
 	}
 
-	phone := strings.ReplaceAll(input.PhoneNumber, " ", "")
-	phone = strings.ReplaceAll(phone, "-", "")
-	phone = strings.ReplaceAll(phone, "(", "")
-	phone = strings.ReplaceAll(phone, ")", "")
-
-	contactID, err := c.findOrCreateContact(phone, input.Name)
+	// Primeiro, criar ou buscar contato
+	contactID, err := c.findOrCreateContact(input)
 	if err != nil {
-		log.Printf("❌ Kommo: Erro ao buscar/criar contato: %v", err)
-		return err
+		return 0, fmt.Errorf("erro ao criar/buscar contato: %w", err)
 	}
 
-	message := fmt.Sprintf("Olá %s, bem-vindo! 🎉\n\nVocê adquiriu o plano %s.\n\nAcesse seu dashboard agora!", input.Name, input.PlanName)
-	if input.Message != "" {
-		message = input.Message
-	}
-	if err := c.sendMessage(contactID, phone, message); err != nil {
-		log.Printf("❌ Kommo: Erro ao enviar mensagem: %v", err)
-		return err
+	// Agora criar o lead com o contato existente
+	leadData := []map[string]interface{}{
+		{
+			"name":      fmt.Sprintf("%s - %s", input.CustomerName, input.PlanName),
+			"status_id": 96648371,
+			"price":     input.Price,
+			"_embedded": map[string]interface{}{
+				"tags": []map[string]interface{}{
+					{"name": "pagamento_confirmado"},
+				},
+				"contacts": []map[string]interface{}{
+					{"id": contactID},
+				},
+			},
+		},
 	}
 
-	log.Printf("✅ Kommo: Mensagem WhatsApp enviada para %s (%s)", input.Name, phone)
-	return nil
+	payload, _ := json.Marshal(leadData)
+	req, _ := http.NewRequest("POST", c.baseURL+"/leads", bytes.NewBuffer(payload))
+	c.addAuthHeaders(req)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("erro ao criar lead: %d - %s", resp.StatusCode, string(body))
+	}
+
+	var result struct {
+		Embedded struct {
+			Leads []struct {
+				ID int `json:"id"`
+			} `json:"leads"`
+		} `json:"_embedded"`
+	}
+
+	if err := json.Unmarshal(body, &result); err != nil {
+		return 0, err
+	}
+
+	if len(result.Embedded.Leads) == 0 {
+		return 0, fmt.Errorf("lead não criado")
+	}
+
+	leadID := result.Embedded.Leads[0].ID
+	log.Printf("✅ Kommo: Lead criado #%d para %s (%s)", leadID, input.CustomerName, input.PlanName)
+
+	return leadID, nil
 }
 
-func (c *Client) findOrCreateContact(phone, name string) (int, error) {
-	contactID, err := c.findContactByPhone(phone)
+func (c *Client) findOrCreateContact(input CreateLeadInput) (int, error) {
+	// Buscar contato por telefone
+	contactID, err := c.findContactByPhone(input.Phone)
 	if err == nil && contactID > 0 {
-		log.Printf("📱 Kommo: Contato encontrado: %d", contactID)
+		log.Printf("📱 Kommo: Contato existente encontrado: %d", contactID)
 		return contactID, nil
 	}
 
-	return c.createContact(phone, name)
+	// Se não encontrou, criar novo contato
+	return c.createContact(input)
 }
 
 func (c *Client) findContactByPhone(phone string) (int, error) {
-	url := fmt.Sprintf("%s/contacts?filter[phone]=%s&limit=1", c.baseURL, phone)
+	url := fmt.Sprintf("%s/contacts?query=%s", c.baseURL, phone)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -83,7 +119,7 @@ func (c *Client) findContactByPhone(phone string) (int, error) {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("kommo api error: %d", resp.StatusCode)
+		return 0, fmt.Errorf("erro ao buscar contato: %d", resp.StatusCode)
 	}
 
 	var result struct {
@@ -105,32 +141,30 @@ func (c *Client) findContactByPhone(phone string) (int, error) {
 	return 0, fmt.Errorf("contato não encontrado")
 }
 
-func (c *Client) createContact(phone, name string) (int, error) {
-	url := fmt.Sprintf("%s/contacts", c.baseURL)
-
-	payload := map[string]interface{}{
-		"first_name": name,
-		"custom_fields_values": []map[string]interface{}{
-			{
-				"field_id": 123456, // ID do campo de telefone no Kommo (configurável)
-				"values": []map[string]interface{}{
-					{
-						"value": phone,
+func (c *Client) createContact(input CreateLeadInput) (int, error) {
+	contactData := []map[string]interface{}{
+		{
+			"name": input.CustomerName,
+			"custom_fields_values": []map[string]interface{}{
+				{
+					"field_code": "PHONE",
+					"values": []map[string]interface{}{
+						{"value": input.Phone, "enum_code": "WORK"},
+					},
+				},
+				{
+					"field_code": "EMAIL",
+					"values": []map[string]interface{}{
+						{"value": input.Email, "enum_code": "WORK"},
 					},
 				},
 			},
 		},
 	}
 
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return 0, err
-	}
-
+	payload, _ := json.Marshal(contactData)
+	req, _ := http.NewRequest("POST", c.baseURL+"/contacts", bytes.NewBuffer(payload))
 	c.addAuthHeaders(req)
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -138,10 +172,10 @@ func (c *Client) createContact(phone, name string) (int, error) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("kommo api error: %d - %s", resp.StatusCode, string(respBody))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return 0, fmt.Errorf("erro ao criar contato: %d - %s", resp.StatusCode, string(body))
 	}
 
 	var result struct {
@@ -152,53 +186,21 @@ func (c *Client) createContact(phone, name string) (int, error) {
 		} `json:"_embedded"`
 	}
 
-	if err := json.Unmarshal(respBody, &result); err != nil {
+	if err := json.Unmarshal(body, &result); err != nil {
 		return 0, err
 	}
 
 	if len(result.Embedded.Contacts) > 0 {
-		return result.Embedded.Contacts[0].ID, nil
+		contactID := result.Embedded.Contacts[0].ID
+		log.Printf("✅ Kommo: Novo contato criado: %d", contactID)
+		return contactID, nil
 	}
 
-	return 0, fmt.Errorf("erro ao criar contato")
-}
-
-func (c *Client) sendMessage(contactID int, phone, message string) error {
-	url := fmt.Sprintf("%s/messages", c.baseURL)
-
-	payload := map[string]interface{}{
-		"to":           contactID,
-		"service_code": "whatsapp",
-		"text":         message,
-		"phone":        phone,
-	}
-
-	body, _ := json.Marshal(payload)
-
-	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	c.addAuthHeaders(req)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	respBody, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("kommo api error: %d - %s", resp.StatusCode, string(respBody))
-	}
-
-	return nil
+	return 0, fmt.Errorf("erro ao obter ID do contato criado")
 }
 
 func (c *Client) addAuthHeaders(req *http.Request) {
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiToken))
-	req.Header.Set("X-Amocrm-Account-Id", c.accountID)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 }

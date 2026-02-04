@@ -106,7 +106,7 @@ func TestActivationPayloadEmptyHandling(t *testing.T) {
 
 // TestActivationPayloadMultipleProviders - Teste com diferentes providers
 func TestActivationPayloadMultipleProviders(t *testing.T) {
-	providers := []string{"DOC24", "TEMSAUDE", "OTHER"}
+	providers := []string{"DOC24", "OTHER"}
 
 	for _, provider := range providers {
 		payload := queue.ActivationPayload{

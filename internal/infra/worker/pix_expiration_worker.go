@@ -7,13 +7,11 @@ import (
 	"time"
 )
 
-
 type PixExpirationWorker struct {
 	db               *sql.DB
 	expirationWindow time.Duration
 	tickInterval     time.Duration
 }
-
 
 func NewPixExpirationWorker(db *sql.DB) *PixExpirationWorker {
 	return &PixExpirationWorker{
@@ -23,15 +21,13 @@ func NewPixExpirationWorker(db *sql.DB) *PixExpirationWorker {
 	}
 }
 
-
 func (w *PixExpirationWorker) Start(ctx context.Context) {
 	log.Println("🕒 PIX Expiration Worker iniciado (30min window)")
 
 	ticker := time.NewTicker(w.tickInterval)
 	defer ticker.Stop()
 
-
-	w.expireOldPix(ctx)
+	// w.expireOldPix(ctx)
 
 	for {
 		select {
@@ -44,7 +40,6 @@ func (w *PixExpirationWorker) Start(ctx context.Context) {
 	}
 }
 
-
 func (w *PixExpirationWorker) expireOldPix(ctx context.Context) {
 	query := `
 		UPDATE subscriptions
@@ -52,7 +47,7 @@ func (w *PixExpirationWorker) expireOldPix(ctx context.Context) {
 			status = 'EXPIRED',
 			updated_at = NOW()
 		WHERE 
-			status = 'WAITING_PAYMENT'
+			status = 'PENDING'
 			AND payment_method = 'PIX'
 			AND created_at < NOW() - INTERVAL '30 minutes'
 		RETURNING id, customer_id, created_at

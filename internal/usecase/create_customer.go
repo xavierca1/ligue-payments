@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"time"
 
@@ -19,7 +18,7 @@ func NewCreateCustomerUseCase(
 	gateway PaymentGateway,
 	queue QueueProducerInterface,
 	emailService EmailService,
-	whatsappService WhatsAppService,
+	kommoService KommoService,
 	welcomeBucketURL string,
 ) *CreateCustomerUseCase {
 	return &CreateCustomerUseCase{
@@ -29,130 +28,10 @@ func NewCreateCustomerUseCase(
 		Gateway:          gateway,
 		Queue:            queue,
 		EmailService:     emailService,
-		WhatsAppService:  whatsappService,
+		KommoService:     kommoService,
 		WelcomeBucketURL: welcomeBucketURL,
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustomerInput) (*CreateCustomerOutput, error) {
 
@@ -169,7 +48,6 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
-
 	plan, err := uc.PlanRepo.FindByID(ctx, input.PlanID)
 	if err != nil {
 		return nil, &DomainError{
@@ -178,10 +56,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
-
-
 	customerID := uuid.New().String()
-
 
 	genderInt, _ := strconv.Atoi(input.Gender)
 	if genderInt <= 0 || genderInt > 3 {
@@ -198,7 +73,6 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		ZipCode:    input.ZipCode,
 	}
 
-
 	customer := &entity.Customer{
 		ID:        customerID,
 		Name:      input.Name,
@@ -206,22 +80,18 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		CPF:       input.CPF,
 		Phone:     input.Phone,
 		PlanID:    input.PlanID,
-		ProductID: plan.ProductID, // 👈 Importante para evitar erro de FK
+		ProductID: plan.ProductID,
 		BirthDate: input.BirthDate,
 		Gender:    genderInt,
 		Address:   address,
-		OnixCode:  input.OnixCode,
-
 
 		TermsAccepted:   input.TermsAccepted,
-		TermsAcceptedAt: parseDateOrNow(input.TermsAcceptedAt), // Helper simples ou time.Now()
+		TermsAcceptedAt: parseDateOrNow(input.TermsAcceptedAt),
 		TermsVersion:    input.TermsVersion,
 
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
-
-
 
 	asaasID, err := uc.Gateway.CreateCustomer(asaas.CreateCustomerInput{
 		Name:              input.Name,
@@ -236,7 +106,6 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		return nil, fmt.Errorf("Asaas recusou o cliente: %w", err)
 	}
 	customer.GatewayID = asaasID
-
 
 	var pixData *asaas.PixOutput
 	var status string = "WAITING_PAYMENT"
@@ -272,11 +141,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
-
 	customer.SubscriptionID = asaasSubID
-
-
-
 
 	subscription := &entity.Subscription{
 		ID:              uuid.New().String(),
@@ -291,26 +156,19 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		UpdatedAt:       time.Now(),
 	}
 
-
 	txn := NewTransaction()
-
 
 	txn.AddOperation("create_customer", func(ctx context.Context) error {
 		return uc.Repo.Create(ctx, customer)
 	})
 
-
 	txn.AddCompensation("delete_customer", func(ctx context.Context) error {
 		return uc.Repo.Delete(ctx, customer.ID)
 	})
 
-
 	txn.AddOperation("create_subscription", func(ctx context.Context) error {
 		return uc.SubRepo.Create(ctx, subscription)
 	})
-
-
-
 
 	if err := txn.Execute(ctx); err != nil {
 		return nil, &TechnicalError{
@@ -319,22 +177,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
-
-
-	go func() {
-
-		if uc.EmailService != nil {
-			uc.EmailService.SendWelcome(customer.Email, customer.Name, plan.Name, uc.WelcomeBucketURL)
-		}
-
-
-
-		if uc.WhatsAppService != nil && customer.Phone != "" {
-			templateID := os.Getenv("WHATSAPP_TEMPLATE_ID")
-			uc.WhatsAppService.SendWelcome(customer.Phone, customer.Name, plan.Name, templateID)
-		}
-	}()
-
+	// Notificações movidas para activate_subscription (após pagamento confirmado)
 
 	var pixCode, pixUrl string
 	if pixData != nil {
@@ -350,7 +193,6 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		Msg:          "Pré-cadastro realizado com sucesso!",
 	}, nil
 }
-
 
 func parseDateOrNow(dateStr string) time.Time {
 	t, err := time.Parse(time.RFC3339, dateStr)

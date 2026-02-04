@@ -52,6 +52,7 @@ services:
   rabbitmq:
     image: rabbitmq:3.12-management-alpine
     container_name: ligue-rabbitmq
+    restart: always
     environment:
       - RABBITMQ_DEFAULT_USER=guest
       - RABBITMQ_DEFAULT_PASS=guest
@@ -68,40 +69,10 @@ services:
       timeout: 5s
       retries: 5
 
-volumes:
-  postgres_data:
-  rabbitmq_data:
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # 🐰 A Fila (RabbitMQ)
-  rabbitmq:
-    image: rabbitmq:3.12-management
-    container_name: ligue_rabbitmq
-    restart: always
-    ports:
-      - "5672:5672"   # Protocolo AMQP (Onde o Go conecta)
-      - "15672:15672" # Painel Administrativo (Onde você acessa via Browser)
-    environment:
-      RABBITMQ_DEFAULT_USER: user
-      RABBITMQ_DEFAULT_PASS: password
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq # Persistência das filas
-    networks:
-      - ligue-network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-# 🌐 Rede interna para eles conversarem entre si
 networks:
   ligue-network:
     driver: bridge
 
-# 💾 Discos Virtuais (Volumes)
 volumes:
   postgres_data:
   rabbitmq_data:

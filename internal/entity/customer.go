@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
 )
-
 
 type Address struct {
 	Street     string `json:"street"`
@@ -20,13 +18,11 @@ type Address struct {
 	ZipCode    string `json:"zip_code"`
 }
 
-
 type Customer struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email"`
 	CPF   string `json:"cpf"`
-
 
 	Phone     string  `json:"phone"`
 	BirthDate string  `json:"birth_date"`
@@ -36,11 +32,9 @@ type Customer struct {
 
 	ProductID string `json:"product_id"`
 
-
 	GatewayID      string    `json:"gateway_id"`
 	SubscriptionID string    `json:"subscription_id"`
 	ProviderID     string    `json:"provider_id"`
-	OnixCode       string    `json:"onix_code"`
 	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
@@ -50,7 +44,7 @@ type Customer struct {
 	TermsVersion    string    `json:"terms_version"`
 }
 
-func NewCustomer(name, email, cpf, onixCode, phone, birthDate string, gender int, address Address) (*Customer, error) {
+func NewCustomer(name, email, cpf, phone, birthDate string, gender int, address Address) (*Customer, error) {
 	customer := &Customer{
 		ID:        uuid.New().String(),
 		Name:      name,
@@ -60,7 +54,6 @@ func NewCustomer(name, email, cpf, onixCode, phone, birthDate string, gender int
 		BirthDate: birthDate,
 		Gender:    gender,
 		Address:   address,
-		OnixCode:  onixCode,
 
 		Status:    "PENDING",
 		CreatedAt: time.Now(),

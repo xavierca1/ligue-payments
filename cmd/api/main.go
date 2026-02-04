@@ -24,6 +24,21 @@ import (
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
+// KommoAdapter adapta o Kommo Client para a interface KommoService
+type KommoAdapter struct {
+	client *kommo.Client
+}
+
+func (a *KommoAdapter) CreateLead(customerName, phone, email, planName string, price int) (int, error) {
+	return a.client.CreateLead(kommo.CreateLeadInput{
+		CustomerName: customerName,
+		Phone:        phone,
+		Email:        email,
+		PlanName:     planName,
+		Price:        price,
+	})
+}
+
 func main() {
 	godotenv.Load()
 
@@ -33,7 +48,12 @@ func main() {
 	}
 	defer db.Close()
 
-	rabbitMQ, err := queue.NewRabbitMQ("user", "password", "localhost", "5672")
+	rabbitMQ, err := queue.NewRabbitMQ(
+		os.Getenv("RABBITMQ_USER"),
+		os.Getenv("RABBITMQ_PASS"),
+		os.Getenv("RABBITMQ_HOST"),
+		os.Getenv("RABBITMQ_PORT"),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -53,7 +73,7 @@ func main() {
 		os.Getenv("MAIL_HOST"), 587, os.Getenv("MAIL_USER"), os.Getenv("MAIL_PASS"),
 	)
 	kommoClient := kommo.NewClient()
-	whatsappSender := mail.NewWhatsAppSender(kommoClient)
+	kommoAdapter := &KommoAdapter{client: kommoClient}
 	docClient := doc24.NewClient("liguemed", "J3xpZW50U2VjjkV0RG9jMjRNiOJlNDM=")
 
 	// Background Workers
@@ -67,12 +87,12 @@ func main() {
 
 	// UseCases
 	createCustomerUC := usecase.NewCreateCustomerUseCase(
-		customerRepo, subRepo, planRepo, gateway, producer, mailSender, whatsappSender,
+		customerRepo, subRepo, planRepo, gateway, producer, mailSender, kommoAdapter,
 		os.Getenv("SUPABASE_STORAGE_URL"),
 	)
 
 	activateSubUC := usecase.NewActivateSubscriptionUseCase(
-		subRepo, customerRepo, planRepo, producer, mailSender,
+		subRepo, customerRepo, planRepo, producer, mailSender, kommoAdapter,
 	)
 
 	// Handlers

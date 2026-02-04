@@ -26,6 +26,16 @@ func (m *MockDoc24Client) GetBeneficiaryID(cpf string) string {
 	return args.String(0)
 }
 
+// MockKommoService
+type MockKommoService struct {
+	mock.Mock
+}
+
+func (m *MockKommoService) CreateLead(customerName, phone, email, planName string, price int) (int, error) {
+	args := m.Called(customerName, phone, email, planName, price)
+	return args.Int(0), args.Error(1)
+}
+
 // TestActivateSubscriptionDoc24Success - Teste completo de ativação com Doc24
 func TestActivateSubscriptionDoc24Success(t *testing.T) {
 	ctx := context.Background()
@@ -35,6 +45,8 @@ func TestActivateSubscriptionDoc24Success(t *testing.T) {
 	mockPlanRepo := new(MockPlanRepository)
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
+	mockKommo := new(MockKommoService)
+	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
 
 	// Customer existente
 	customer := &entity.Customer{
@@ -81,7 +93,7 @@ func TestActivateSubscriptionDoc24Success(t *testing.T) {
 
 	uc := usecase.NewActivateSubscriptionUseCase(
 		mockSubRepo, mockCustomerRepo, mockPlanRepo,
-		mockQueue, mockEmailService,
+		mockQueue, mockEmailService, mockKommo,
 	)
 
 	input := usecase.ActivateSubscriptionInput{
@@ -109,6 +121,8 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
 	mockDoc24Client := new(MockDoc24Client)
+	mockKommo := new(MockKommoService)
+	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
 
 	customer := &entity.Customer{
 		ID:        "cust-123",
@@ -154,7 +168,7 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 	// 1. Webhook ativa subscription
 	activateUC := usecase.NewActivateSubscriptionUseCase(
 		mockSubRepo, mockCustomerRepo, mockPlanRepo,
-		mockQueue, mockEmailService,
+		mockQueue, mockEmailService, mockKommo,
 	)
 
 	input := usecase.ActivateSubscriptionInput{

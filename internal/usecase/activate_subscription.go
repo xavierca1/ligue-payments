@@ -10,15 +10,13 @@ import (
 	"github.com/xavierca1/ligue-payments/internal/infra/queue"
 )
 
-
-
-
 func NewActivateSubscriptionUseCase(
 	subRepo entity.SubscriptionRepository,
-	customerRepo entity.CustomerRepositoryInterface, // 👈 Novo argumento
-	planRepo entity.PlanRepositoryInterface, // 👈 Novo argumento
+	customerRepo entity.CustomerRepositoryInterface,
+	planRepo entity.PlanRepositoryInterface,
 	queue queue.QueueProducerInterface,
 	emailService EmailService,
+	kommoService KommoService,
 ) *ActivateSubscriptionUseCase {
 	return &ActivateSubscriptionUseCase{
 		SubRepo:      subRepo,
@@ -26,13 +24,12 @@ func NewActivateSubscriptionUseCase(
 		PlanRepo:     planRepo,
 		Queue:        queue,
 		EmailService: emailService,
+		KommoService: kommoService,
 	}
 }
 
 func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input ActivateSubscriptionInput) error {
 	log.Printf(" Iniciando ativação para CustomerID: %s", input.CustomerID)
-
-
 
 	customer, err := uc.CustomerRepo.FindByID(ctx, input.CustomerID)
 	if err != nil {
@@ -41,30 +38,23 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 
 	genderStr := strconv.Itoa(customer.Gender)
 
-
-
 	sub, err := uc.SubRepo.FindLastByCustomerID(ctx, input.CustomerID)
 	if err != nil {
 		return fmt.Errorf("falha ao buscar assinatura do cliente: %w", err)
 	}
 
-
 	if sub.PlanID == "" {
 		return fmt.Errorf("inconsistência: assinatura %s não tem PlanID vinculado", sub.ID)
 	}
-
-
 
 	if err := uc.SubRepo.UpdateStatus(input.CustomerID, "ACTIVE"); err != nil {
 		return fmt.Errorf("erro ao ativar status no banco: %w", err)
 	}
 
-
 	plan, err := uc.PlanRepo.FindByID(ctx, sub.PlanID)
 	if err != nil {
 		return fmt.Errorf("falha ao buscar plano (%s): %w", sub.PlanID, err)
 	}
-
 
 	payload := queue.ActivationPayload{
 		CustomerID: customer.ID,
@@ -79,12 +69,23 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 		Gender:     genderStr,          // Certifique-se que o customer tem esse campo
 	}
 
-
 	if err := uc.Queue.PublishActivation(ctx, payload); err != nil {
-
 		log.Printf(" CRITICAL: Assinatura ativada no banco, mas falha ao publicar na fila: %v", err)
 		return nil
 	}
+
+	// Criar lead no Kommo após pagamento confirmado
+	go func() {
+		if uc.KommoService != nil {
+			price := plan.PriceCents // Já está em centavos
+			leadID, err := uc.KommoService.CreateLead(customer.Name, customer.Phone, customer.Email, plan.Name, price)
+			if err != nil {
+				log.Printf("⚠️ Falha ao criar lead no Kommo (não bloqueia): %v", err)
+			} else {
+				log.Printf("✅ Lead criado no Kommo: #%d", leadID)
+			}
+		}
+	}()
 
 	log.Printf(" Ativação enviada com sucesso para %s via %s", customer.Name, plan.Provider)
 	return nil

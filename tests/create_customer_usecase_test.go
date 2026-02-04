@@ -207,7 +207,6 @@ func TestCreateCustomerPixFlowSuccess(t *testing.T) {
 		City:            "São Paulo",
 		State:           "SP",
 		ZipCode:         "01310-100",
-		OnixCode:        "7065",
 		TermsAccepted:   true,
 		TermsAcceptedAt: time.Now().Format(time.RFC3339),
 		TermsVersion:    "1.0",
@@ -263,12 +262,12 @@ func TestCreateCustomerCreditCardFlowSuccess(t *testing.T) {
 	mockCustomerRepo.On("Create", ctx, mock.Anything).Return(nil)
 	mockSubRepo.On("Create", ctx, mock.Anything).Return(nil)
 
-	mockWhatsApp := new(MockWhatsAppService)
-	mockWhatsApp.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockKommo := new(MockKommoService)
+	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
-		mockGateway, mockQueue, mockEmailService, mockWhatsApp,
+		mockGateway, mockQueue, mockEmailService, mockKommo,
 		"https://storage.example.com",
 	)
 
@@ -288,7 +287,6 @@ func TestCreateCustomerCreditCardFlowSuccess(t *testing.T) {
 		City:            "Rio de Janeiro",
 		State:           "RJ",
 		ZipCode:         "20040-020",
-		OnixCode:        "7065",
 		CardHolder:      "MARIA SANTOS",
 		CardNumber:      "4532015112830366", // Número válido de teste (Luhn check)
 		CardMonth:       "12",
@@ -353,7 +351,6 @@ func TestCreateCustomerValidationFailure(t *testing.T) {
 		City:            "São Paulo",
 		State:           "SP",
 		ZipCode:         "01310-100",
-		OnixCode:        "7065",
 		TermsAccepted:   true,
 		TermsAcceptedAt: time.Now().Format(time.RFC3339),
 		TermsVersion:    "1.0",
@@ -406,7 +403,6 @@ func TestCreateCustomerPlanNotFound(t *testing.T) {
 		City:            "São Paulo",
 		State:           "SP",
 		ZipCode:         "01310-100",
-		OnixCode:        "7065",
 		TermsAccepted:   true,
 		TermsAcceptedAt: time.Now().Format(time.RFC3339),
 		TermsVersion:    "1.0",
@@ -465,7 +461,6 @@ func TestCreateCustomerPaymentFailure(t *testing.T) {
 		City:            "São Paulo",
 		State:           "SP",
 		ZipCode:         "01310-100",
-		OnixCode:        "7065",
 		TermsAccepted:   true,
 		TermsAcceptedAt: time.Now().Format(time.RFC3339),
 		TermsVersion:    "1.0",
@@ -537,7 +532,6 @@ func TestCreateCustomerDatabaseFailureRollback(t *testing.T) {
 		City:            "São Paulo",
 		State:           "SP",
 		ZipCode:         "01310-100",
-		OnixCode:        "7065",
 		TermsAccepted:   true,
 		TermsAcceptedAt: time.Now().Format(time.RFC3339),
 		TermsVersion:    "1.0",
