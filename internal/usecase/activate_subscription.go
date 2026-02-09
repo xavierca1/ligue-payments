@@ -74,20 +74,15 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 		return nil
 	}
 
-	// Criar lead no Kommo após pagamento confirmado
+	// Enviar email de boas-vindas
+	// TODO: Configurar credenciais SMTP no .env (MAIL_HOST, MAIL_PORT, MAIL_USER, MAIL_PASS)
 	go func() {
-		if uc.KommoService != nil {
-			leadID, err := uc.KommoService.CreateLead(
-				customer.Name,
-				customer.Phone,
-				customer.Email,
-				plan.Name,
-				plan.PriceCents,
-			)
+		if uc.EmailService != nil {
+			err := uc.EmailService.SendWelcomeEmail(customer.Name, customer.Email)
 			if err != nil {
-				log.Printf("⚠️ Falha ao criar lead no Kommo (não bloqueia): %v", err)
+				log.Printf("⚠️ Falha ao enviar email de boas-vindas (não bloqueia): %v", err)
 			} else {
-				log.Printf("✅ Lead criado no Kommo: #%d", leadID)
+				log.Printf("✅ Email de boas-vindas enviado para %s", customer.Email)
 			}
 		}
 	}()
