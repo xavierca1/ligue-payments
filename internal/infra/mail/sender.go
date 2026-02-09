@@ -53,7 +53,10 @@ func (s *EmailSender) SendWelcome(to, name, productName, pdfLink string) error {
 	}
 
 	return nil
+}
 
+func (s *EmailSender) SendWelcomeEmail(name, email string) error {
+	return s.SendWelcome(email, name, "Ligue Medicina", "")
 }
 
 

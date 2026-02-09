@@ -75,7 +75,7 @@ type QueueProducerInterface interface {
 }
 
 type EmailService interface {
-	SendWelcome(to, name, productName, pdfLink string) error
+	SendWelcomeEmail(name, email string) error
 }
 
 type KommoService interface {
