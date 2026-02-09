@@ -6,4 +6,5 @@ type CreateLeadInput struct {
 	Email        string
 	PlanName     string
 	Price        int
+	Origin       string // Canal de origem (ex: "Checkout Website")
 }

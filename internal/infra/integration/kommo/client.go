@@ -8,17 +8,30 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 type Client struct {
-	apiToken string
-	baseURL  string
+	apiToken           string
+	baseURL            string
+	pipelineB2CID      int
+	productFieldID     int
+	originFieldID      int
+	statusEmFechamento int
 }
 
 func NewClient() *Client {
+	pipelineID, _ := strconv.Atoi(os.Getenv("KOMMO_PIPELINE_B2C_ID"))
+	productFieldID, _ := strconv.Atoi(os.Getenv("KOMMO_FIELD_PRODUTO_ID"))
+	originFieldID, _ := strconv.Atoi(os.Getenv("KOMMO_FIELD_ORIGEM_ID"))
+
 	return &Client{
-		apiToken: os.Getenv("KOMMO_API_TOKEN"),
-		baseURL:  "https://liguemedicina.kommo.com/api/v4",
+		apiToken:           os.Getenv("KOMMO_API_TOKEN"),
+		baseURL:            "https://liguemedicina.kommo.com/api/v4",
+		pipelineB2CID:      pipelineID,
+		productFieldID:     productFieldID,
+		originFieldID:      originFieldID,
+		statusEmFechamento: 142,
 	}
 }
 
@@ -28,31 +41,59 @@ func (c *Client) CreateLead(input CreateLeadInput) (int, error) {
 		return 0, fmt.Errorf("kommo não configurado")
 	}
 
-	// Primeiro, criar ou buscar contato
-	contactID, err := c.findOrCreateContact(input)
-	if err != nil {
-		return 0, fmt.Errorf("erro ao criar/buscar contato: %w", err)
+	phoneCleaned := cleanPhone(input.Phone)
+	phoneFormatted := formatPhoneWithCountryCode(phoneCleaned)
+	productName := determineProductName(input.PlanName)
+
+	originChannel := input.Origin
+	if originChannel == "" {
+		originChannel = "Outros"
 	}
 
-	// Agora criar o lead com o contato existente
-	leadData := []map[string]interface{}{
-		{
-			"name":      fmt.Sprintf("%s - %s", input.CustomerName, input.PlanName),
-			"status_id": 96648371,
-			"price":     input.Price,
-			"_embedded": map[string]interface{}{
-				"tags": []map[string]interface{}{
-					{"name": "pagamento_confirmado"},
-				},
-				"contacts": []map[string]interface{}{
-					{"id": contactID},
+	lead := map[string]interface{}{
+		"name":        input.CustomerName,
+		"pipeline_id": c.pipelineB2CID,
+		"status_id":   c.statusEmFechamento,
+		"_embedded": map[string]interface{}{
+			"tags": []map[string]interface{}{
+				{"name": "pagamento_confirmado"},
+			},
+			"contacts": []map[string]interface{}{
+				{
+					"first_name": input.CustomerName,
+					"custom_fields_values": []map[string]interface{}{
+						{
+							"field_code": "PHONE",
+							"values": []map[string]interface{}{
+								{"value": phoneFormatted, "enum_code": "WORK"},
+							},
+						},
+						{
+							"field_code": "EMAIL",
+							"values": []map[string]interface{}{
+								{"value": input.Email, "enum_code": "WORK"},
+							},
+						},
+					},
 				},
 			},
 		},
 	}
 
-	payload, _ := json.Marshal(leadData)
-	req, _ := http.NewRequest("POST", c.baseURL+"/leads", bytes.NewBuffer(payload))
+	customFields := buildCustomFields(c, productName, originChannel)
+	customFields = append(customFields, map[string]interface{}{
+		"field_code": "CHECKOUT_API",
+		"values": []map[string]interface{}{
+			{"value": true},
+		},
+	})
+
+	lead["custom_fields_values"] = customFields
+	leadPayload := []map[string]interface{}{lead}
+	payload, _ := json.Marshal(leadPayload)
+
+	url := fmt.Sprintf("%s/leads/complex", c.baseURL)
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	c.addAuthHeaders(req)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -67,140 +108,102 @@ func (c *Client) CreateLead(input CreateLeadInput) (int, error) {
 		return 0, fmt.Errorf("erro ao criar lead: %d - %s", resp.StatusCode, string(body))
 	}
 
-	var result struct {
-		Embedded struct {
-			Leads []struct {
-				ID int `json:"id"`
-			} `json:"leads"`
-		} `json:"_embedded"`
+	var result []struct {
+		ID int `json:"id"`
 	}
 
 	if err := json.Unmarshal(body, &result); err != nil {
 		return 0, err
 	}
 
-	if len(result.Embedded.Leads) == 0 {
+	if len(result) == 0 {
 		return 0, fmt.Errorf("lead não criado")
 	}
 
-	leadID := result.Embedded.Leads[0].ID
-	log.Printf("✅ Kommo: Lead criado #%d para %s (%s)", leadID, input.CustomerName, input.PlanName)
+	leadID := result[0].ID
+	log.Printf("✅ Kommo: Lead B2C criado #%d - %s | Produto: %s | Origem: %s",
+		leadID, input.CustomerName, productName, originChannel)
 
 	return leadID, nil
 }
 
-func (c *Client) findOrCreateContact(input CreateLeadInput) (int, error) {
-	// Buscar contato por telefone
-	contactID, err := c.findContactByPhone(input.Phone)
-	if err == nil && contactID > 0 {
-		log.Printf("📱 Kommo: Contato existente encontrado: %d", contactID)
-		return contactID, nil
+func cleanPhone(phone string) string {
+	cleaned := ""
+	for _, char := range phone {
+		if char >= '0' && char <= '9' {
+			cleaned += string(char)
+		}
 	}
-
-	// Se não encontrou, criar novo contato
-	return c.createContact(input)
+	return cleaned
 }
 
-func (c *Client) findContactByPhone(phone string) (int, error) {
-	url := fmt.Sprintf("%s/contacts?query=%s", c.baseURL, phone)
+func formatPhoneWithCountryCode(phone string) string {
+	cleaned := cleanPhone(phone)
 
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return 0, err
+	if len(cleaned) > 10 && cleaned[:2] == "55" {
+		cleaned = cleaned[2:]
 	}
 
-	c.addAuthHeaders(req)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("erro ao buscar contato: %d", resp.StatusCode)
+	if len(cleaned) == 11 {
+		cleaned = cleaned[:2] + cleaned[3:]
 	}
 
-	var result struct {
-		Embedded struct {
-			Contacts []struct {
-				ID int `json:"id"`
-			} `json:"contacts"`
-		} `json:"_embedded"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
-	}
-
-	if len(result.Embedded.Contacts) > 0 {
-		return result.Embedded.Contacts[0].ID, nil
-	}
-
-	return 0, fmt.Errorf("contato não encontrado")
+	return "+55" + cleaned
 }
 
-func (c *Client) createContact(input CreateLeadInput) (int, error) {
-	contactData := []map[string]interface{}{
-		{
-			"name": input.CustomerName,
-			"custom_fields_values": []map[string]interface{}{
-				{
-					"field_code": "PHONE",
-					"values": []map[string]interface{}{
-						{"value": input.Phone, "enum_code": "WORK"},
-					},
-				},
-				{
-					"field_code": "EMAIL",
-					"values": []map[string]interface{}{
-						{"value": input.Email, "enum_code": "WORK"},
-					},
-				},
+func determineProductName(planName string) string {
+	planLower := ""
+	for _, char := range planName {
+		if char >= 'A' && char <= 'Z' {
+			planLower += string(char + 32)
+		} else {
+			planLower += string(char)
+		}
+	}
+
+	if contains(planLower, "odonto") || contains(planLower, "dental") {
+		return "Plano Odontológico"
+	}
+
+	return "Telemedicina"
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && indexOf(s, substr) >= 0
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		match := true
+		for j := 0; j < len(substr); j++ {
+			if s[i+j] != substr[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func buildCustomFields(c *Client, productName, originChannel string) []map[string]interface{} {
+	fields := []map[string]interface{}{}
+
+	if c.productFieldID > 0 && productName != "" {
+		fields = append(fields, map[string]interface{}{
+			"field_id": c.productFieldID,
+			"values": []map[string]interface{}{
+				{"value": productName},
 			},
-		},
+		})
 	}
 
-	payload, _ := json.Marshal(contactData)
-	req, _ := http.NewRequest("POST", c.baseURL+"/contacts", bytes.NewBuffer(payload))
-	c.addAuthHeaders(req)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return 0, fmt.Errorf("erro ao criar contato: %d - %s", resp.StatusCode, string(body))
-	}
-
-	var result struct {
-		Embedded struct {
-			Contacts []struct {
-				ID int `json:"id"`
-			} `json:"contacts"`
-		} `json:"_embedded"`
-	}
-
-	if err := json.Unmarshal(body, &result); err != nil {
-		return 0, err
-	}
-
-	if len(result.Embedded.Contacts) > 0 {
-		contactID := result.Embedded.Contacts[0].ID
-		log.Printf("✅ Kommo: Novo contato criado: %d", contactID)
-		return contactID, nil
-	}
-
-	return 0, fmt.Errorf("erro ao obter ID do contato criado")
+	return fields
 }
 
 func (c *Client) addAuthHeaders(req *http.Request) {
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.apiToken))
+	req.Header.Set("Authorization", "Bearer "+c.apiToken)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
 }

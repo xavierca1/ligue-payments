@@ -77,8 +77,13 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 	// Criar lead no Kommo após pagamento confirmado
 	go func() {
 		if uc.KommoService != nil {
-			price := plan.PriceCents // Já está em centavos
-			leadID, err := uc.KommoService.CreateLead(customer.Name, customer.Phone, customer.Email, plan.Name, price)
+			leadID, err := uc.KommoService.CreateLead(
+				customer.Name,
+				customer.Phone,
+				customer.Email,
+				plan.Name,
+				plan.PriceCents,
+			)
 			if err != nil {
 				log.Printf("⚠️ Falha ao criar lead no Kommo (não bloqueia): %v", err)
 			} else {
