@@ -61,10 +61,26 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if event.Event != "PAYMENT_RECEIVED" && event.Event != "PAYMENT_CONFIRMED" {
+	// Eventos que ativam a assinatura:
+	// - PAYMENT_RECEIVED: PIX confirmado
+	// - PAYMENT_CONFIRMED: PIX confirmado (alternativo)
+	// - PAYMENT_APPROVED: Cartão de crédito aprovado
+	validEvents := []string{"PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_APPROVED"}
+	isValid := false
+	for _, validEvent := range validEvents {
+		if event.Event == validEvent {
+			isValid = true
+			break
+		}
+	}
+	
+	if !isValid {
+		log.Printf("ℹ️ Webhook: Evento ignorado: %s", event.Event)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	
+	log.Printf("📥 Webhook: Evento recebido: %s para customer %s", event.Event, event.Payment.Customer)
 
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(event.Payment.Customer)
 	if err != nil {

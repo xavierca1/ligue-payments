@@ -139,12 +139,53 @@ func (m *MockEmailService) SendWelcome(to, name, productName, pdfLink string) er
 	return args.Error(0)
 }
 
+func (m *MockEmailService) SendWelcomeEmail(name, email string) error {
+	args := m.Called(name, email)
+	return args.Error(0)
+}
+
 type MockWhatsAppService struct {
 	mock.Mock
 }
 
 func (m *MockWhatsAppService) SendWelcome(phone, name, planName, templateID string) error {
 	args := m.Called(phone, name, planName, templateID)
+	return args.Error(0)
+}
+
+// MockDependentRepository
+type MockDependentRepository struct {
+	mock.Mock
+}
+
+func (m *MockDependentRepository) Create(ctx context.Context, dependent *entity.Dependent) error {
+	args := m.Called(ctx, dependent)
+	return args.Error(0)
+}
+
+func (m *MockDependentRepository) FindByCustomerID(ctx context.Context, customerID string) ([]*entity.Dependent, error) {
+	args := m.Called(ctx, customerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*entity.Dependent), args.Error(1)
+}
+
+func (m *MockDependentRepository) FindByID(ctx context.Context, id string) (*entity.Dependent, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.Dependent), args.Error(1)
+}
+
+func (m *MockDependentRepository) Delete(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockDependentRepository) Update(ctx context.Context, dependent *entity.Dependent) error {
+	args := m.Called(ctx, dependent)
 	return args.Error(0)
 }
 
@@ -183,11 +224,13 @@ func TestCreateCustomerPixFlowSuccess(t *testing.T) {
 	mockCustomerRepo.On("Create", ctx, mock.Anything).Return(nil)
 	mockSubRepo.On("Create", ctx, mock.Anything).Return(nil)
 	mockEmailService.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockDependentRepo := new(MockDependentRepository)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		mockDependentRepo,
 	)
 
 	// Input válido - PIX
@@ -264,11 +307,13 @@ func TestCreateCustomerCreditCardFlowSuccess(t *testing.T) {
 
 	mockKommo := new(MockKommoService)
 	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
+	mockDependentRepo := new(MockDependentRepository)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, mockKommo,
 		"https://storage.example.com",
+		mockDependentRepo,
 	)
 
 	// Input válido - Cartão de Crédito
@@ -328,11 +373,13 @@ func TestCreateCustomerValidationFailure(t *testing.T) {
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
 	mockEmailService.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockDependentRepo := new(MockDependentRepository)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		mockDependentRepo,
 	)
 
 	// Input inválido - Email faltando
@@ -381,11 +428,13 @@ func TestCreateCustomerPlanNotFound(t *testing.T) {
 
 	// Plano não existe
 	mockPlanRepo.On("FindByID", ctx, "plan-inexistente").Return(nil, errors.New("not found"))
+	mockDependentRepo := new(MockDependentRepository)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		mockDependentRepo,
 	)
 
 	input := usecase.CreateCustomerInput{
@@ -439,11 +488,13 @@ func TestCreateCustomerPaymentFailure(t *testing.T) {
 	mockPlanRepo.On("FindByID", ctx, "plan-123").Return(plan, nil)
 	mockGateway.On("CreateCustomer", mock.Anything).Return("asaas-cust-123", nil)
 	mockGateway.On("SubscribePix", mock.Anything).Return("", nil, errors.New("payment declined"))
+	mockDependentRepo := new(MockDependentRepository)
 
 	uc := usecase.NewCreateCustomerUseCase(
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		mockDependentRepo,
 	)
 
 	input := usecase.CreateCustomerInput{
@@ -515,6 +566,7 @@ func TestCreateCustomerDatabaseFailureRollback(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	input := usecase.CreateCustomerInput{

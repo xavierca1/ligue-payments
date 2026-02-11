@@ -80,6 +80,7 @@ func TestCreateCheckoutHandlerPixSuccess(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
@@ -127,7 +128,7 @@ func TestCreateCheckoutHandlerPixSuccess(t *testing.T) {
 // TestCreateCheckoutHandlerInvalidJSON - Teste com JSON inválido
 func TestCreateCheckoutHandlerInvalidJSON(t *testing.T) {
 	mockSubRepo := new(MockSubscriptionRepositoryHandler)
-	uc := usecase.NewCreateCustomerUseCase(nil, nil, nil, nil, nil, nil, nil, "")
+	uc := usecase.NewCreateCustomerUseCase(nil, nil, nil, nil, nil, nil, nil, "", nil)
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
 
 	req := httptest.NewRequest("POST", "/checkout", bytes.NewReader([]byte("invalid json")))
@@ -157,6 +158,7 @@ func TestCreateCheckoutHandlerValidationError(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
@@ -211,6 +213,7 @@ func TestGetStatusHandlerSuccess(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
@@ -248,6 +251,7 @@ func TestGetStatusHandlerMissingID(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
@@ -287,6 +291,7 @@ func TestGetStatusHandlerNotFound(t *testing.T) {
 		mockCustomerRepo, mockSubRepo, mockPlanRepo,
 		mockGateway, mockQueue, mockEmailService, nil,
 		"https://storage.example.com",
+		nil,
 	)
 
 	handler := handlers.NewCustomerHandler(uc, mockSubRepo)

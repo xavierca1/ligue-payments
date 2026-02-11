@@ -11,6 +11,16 @@ import (
 type BenefitProvider interface {
 	RegisterBeneficiary(ctx context.Context, c *entity.Customer) (string, error)
 }
+
+// DependentInput representa um dependente no payload de entrada
+type DependentInput struct {
+	Name      string `json:"name"`
+	CPF       string `json:"cpf"`
+	BirthDate string `json:"birth_date"` // Formato: YYYY-MM-DD
+	Gender    string `json:"gender"`     // "1", "2" ou "3"
+	Kinship   string `json:"kinship"`    // FILHO, CONJUGE, PAI, MAE, etc
+}
+
 type CreateCustomerInput struct {
 	Name   string `json:"name"`
 	Email  string `json:"email"`
@@ -38,6 +48,8 @@ type CreateCustomerInput struct {
 	TermsAccepted   bool   `json:"terms_accepted"`
 	TermsAcceptedAt string `json:"terms_accepted_at"` // Vem como string ISO do front
 	TermsVersion    string `json:"terms_version"`
+
+	Dependents []DependentInput `json:"dependents,omitempty"` // Lista de dependentes (opcional)
 }
 
 type CreateCustomerOutput struct {
@@ -96,6 +108,7 @@ type CreateCustomerUseCase struct {
 	EmailService     EmailService
 	KommoService     KommoService
 	WelcomeBucketURL string
+	DependentRepo    entity.DependentRepositoryInterface
 }
 
 type ActivateSubscriptionInput struct {

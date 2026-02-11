@@ -12,9 +12,11 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/xavierca1/ligue-payments/internal/infra/database"
 	"github.com/xavierca1/ligue-payments/internal/infra/http/handlers"
+	httpMiddleware "github.com/xavierca1/ligue-payments/internal/infra/http/middleware"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/doc24"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/kommo"
@@ -65,6 +67,7 @@ func main() {
 	planRepo := database.NewPlanRepository(db)
 	subRepo := database.NewSubscriptionRepository(db)
 	leadRepo := &database.LeadRepository{DB: db}
+	dependentRepo := database.NewDependentRepository(db)
 
 	// External Services
 	gateway := asaas.NewClient(os.Getenv("ASAAS_API_KEY"), os.Getenv("ASAAS_URL"))
@@ -89,6 +92,7 @@ func main() {
 	createCustomerUC := usecase.NewCreateCustomerUseCase(
 		customerRepo, subRepo, planRepo, gateway, producer, mailSender, kommoAdapter,
 		os.Getenv("SUPABASE_STORAGE_URL"),
+		dependentRepo,
 	)
 
 	activateSubUC := usecase.NewActivateSubscriptionUseCase(
@@ -100,10 +104,12 @@ func main() {
 	webhookHandler := handlers.NewWebhookHandler(customerRepo, activateSubUC)
 	validationHandler := handlers.NewValidationHandler(customerRepo)
 	leadHandler := handlers.NewLeadHandler(leadRepo)
+	healthHandler := handlers.NewHealthHandler(db, rabbitMQ.Conn)
 
 	// Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(httpMiddleware.Metrics)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins: []string{"http://localhost:5173", "*"},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -115,14 +121,19 @@ func main() {
 	r.Post("/validate-user", validationHandler.Handle)
 	r.Post("/leads/capture", leadHandler.CaptureLead)
 
-	// Health checks
+	// Observability endpoints
+	r.Get("/health", healthHandler.Handle)
+	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		promhttp.Handler().ServeHTTP(w, r)
+	})
+
+	// Kubernetes health checks
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"healthy"}`))
 	})
 	r.Get("/ready", func(w http.ResponseWriter, r *http.Request) {
-		// Verifica se banco de dados está acessível
 		if err := db.Ping(); err != nil {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			w.Write([]byte(`{"status":"unhealthy","reason":"database"}`))

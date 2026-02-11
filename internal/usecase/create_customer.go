@@ -20,6 +20,7 @@ func NewCreateCustomerUseCase(
 	emailService EmailService,
 	kommoService KommoService,
 	welcomeBucketURL string,
+	dependentRepo entity.DependentRepositoryInterface,
 ) *CreateCustomerUseCase {
 	return &CreateCustomerUseCase{
 		Repo:             repo,
@@ -30,6 +31,7 @@ func NewCreateCustomerUseCase(
 		EmailService:     emailService,
 		KommoService:     kommoService,
 		WelcomeBucketURL: welcomeBucketURL,
+		DependentRepo:    dependentRepo,
 	}
 }
 
@@ -169,6 +171,35 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	txn.AddOperation("create_subscription", func(ctx context.Context) error {
 		return uc.SubRepo.Create(ctx, subscription)
 	})
+
+	// Salvar dependentes (se houver)
+	if len(input.Dependents) > 0 {
+		txn.AddOperation("create_dependents", func(ctx context.Context) error {
+			for _, depInput := range input.Dependents {
+				genderInt, err := strconv.Atoi(depInput.Gender)
+				if err != nil || genderInt < 1 || genderInt > 3 {
+					genderInt = 1 // Default
+				}
+
+				dependent, err := entity.NewDependent(
+					customer.ID,
+					depInput.Name,
+					depInput.CPF,
+					depInput.BirthDate,
+					genderInt,
+					depInput.Kinship,
+				)
+				if err != nil {
+					return fmt.Errorf("erro ao criar dependente %s: %w", depInput.Name, err)
+				}
+
+				if err := uc.DependentRepo.Create(ctx, dependent); err != nil {
+					return fmt.Errorf("erro ao salvar dependente %s: %w", depInput.Name, err)
+				}
+			}
+			return nil
+		})
+	}
 
 	if err := txn.Execute(ctx); err != nil {
 		return nil, &TechnicalError{

@@ -9,10 +9,6 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-
-
-
-
 func NewEmailSender(host string, port int, user, password string) *EmailSender {
 	return &EmailSender{
 		Host:     host,
@@ -58,17 +54,3 @@ func (s *EmailSender) SendWelcome(to, name, productName, pdfLink string) error {
 func (s *EmailSender) SendWelcomeEmail(name, email string) error {
 	return s.SendWelcome(email, name, "Ligue Medicina", "")
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
