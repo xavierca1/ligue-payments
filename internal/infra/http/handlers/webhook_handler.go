@@ -73,13 +73,13 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	
+
 	if !isValid {
 		log.Printf("ℹ️ Webhook: Evento ignorado: %s", event.Event)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
-	
+
 	log.Printf("📥 Webhook: Evento recebido: %s para customer %s", event.Event, event.Payment.Customer)
 
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(event.Payment.Customer)
