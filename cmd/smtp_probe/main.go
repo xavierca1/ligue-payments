@@ -1,0 +1,64 @@
+package smtpprobe
+package main
+
+import (
+	"flag"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}	fmt.Printf("email de teste enviado com sucesso para %s\n", to)	}		log.Fatalf("falha ao enviar email de teste: %v", err)	if err := sender.SendWelcomeEmail(name, to); err != nil {	sender := mail.NewEmailSenderWithFrom(host, port, user, pass, from)	}		log.Fatalf("variáveis ausentes no ambiente: %s", strings.Join(missing, ", "))	if len(missing) > 0 {	}		missing = append(missing, "MAIL_PASS")	if pass == "" {	}		missing = append(missing, "MAIL_USER")	if user == "" {	}		missing = append(missing, "MAIL_HOST")	if host == "" {	missing := make([]string, 0)	}		port = parsed		}			log.Fatalf("MAIL_PORT inválido: %v", err)		if err != nil {		parsed, err := strconv.Atoi(raw)	if raw := strings.TrimSpace(os.Getenv("MAIL_PORT")); raw != "" {	port := 587	from := strings.TrimSpace(os.Getenv("MAIL_FROM"))	pass := strings.TrimSpace(os.Getenv("MAIL_PASS"))	user := strings.TrimSpace(os.Getenv("MAIL_USER"))	host := strings.TrimSpace(os.Getenv("MAIL_HOST"))	}		log.Fatal("parâmetro obrigatório ausente: -to")	if to == "" {	name := strings.TrimSpace(*nameFlag)	to := strings.TrimSpace(*toFlag)	flag.Parse()	nameFlag := flag.String("name", "Cliente Ligue", "Nome para personalização do email")	toFlag := flag.String("to", "", "Email destino para teste")	_ = godotenv.Load()func main() {)	"github.com/xavierca1/ligue-payments/internal/infra/mail"	"github.com/joho/godotenv"	"strings"	"strconv"	"os"	"log"	"fmt"

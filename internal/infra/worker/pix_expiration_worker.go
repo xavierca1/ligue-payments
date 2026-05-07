@@ -41,10 +41,20 @@ func (w *PixExpirationWorker) Start(ctx context.Context) {
 }
 
 func (w *PixExpirationWorker) expireOldPix(ctx context.Context) {
+	expiredStatus, err := w.resolveExpiredStatusLabel(ctx)
+	if err != nil {
+		log.Printf("❌ Erro ao resolver enum sub_status para expiração PIX: %v", err)
+		return
+	}
+	if expiredStatus == "" {
+		log.Printf("⚠️ Nenhum status de expiração válido encontrado no enum sub_status (EXPIRED/CANCELED/CANCELLED)")
+		return
+	}
+
 	query := `
 		UPDATE subscriptions
 		SET 
-			status = 'EXPIRED',
+			status = $1::sub_status,
 			updated_at = NOW()
 		WHERE 
 			status = 'PENDING'
@@ -53,7 +63,7 @@ func (w *PixExpirationWorker) expireOldPix(ctx context.Context) {
 		RETURNING id, customer_id, created_at
 	`
 
-	rows, err := w.db.QueryContext(ctx, query)
+	rows, err := w.db.QueryContext(ctx, query, expiredStatus)
 	if err != nil {
 		log.Printf("❌ Erro ao buscar PIX expirados: %v", err)
 		return
@@ -77,6 +87,38 @@ func (w *PixExpirationWorker) expireOldPix(ctx context.Context) {
 	}
 
 	if expiredCount > 0 {
-		log.Printf("✅ %d PIX(s) marcados como EXPIRED", expiredCount)
+		log.Printf("✅ %d PIX(s) marcados como %s", expiredCount, expiredStatus)
 	}
+}
+
+func (w *PixExpirationWorker) resolveExpiredStatusLabel(ctx context.Context) (string, error) {
+	rows, err := w.db.QueryContext(ctx, `SELECT unnest(enum_range(NULL::sub_status)::text[])`)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+
+	labels := map[string]bool{}
+	for rows.Next() {
+		var label string
+		if err := rows.Scan(&label); err != nil {
+			return "", err
+		}
+		labels[label] = true
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+
+	if labels["EXPIRED"] {
+		return "EXPIRED", nil
+	}
+	if labels["CANCELED"] {
+		return "CANCELED", nil
+	}
+	if labels["CANCELLED"] {
+		return "CANCELLED", nil
+	}
+
+	return "", nil
 }

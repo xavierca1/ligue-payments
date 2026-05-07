@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
@@ -19,7 +20,9 @@ func NewCustomerRepository(db *sql.DB) *CustomerRepository {
 
 func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.Customer, error) {
 	query := `
-		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0)  
+		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0),
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
 		FROM customers 
 		WHERE id = $1
 	`
@@ -35,6 +38,13 @@ func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.C
 		&c.Phone,
 		&c.BirthDate,
 		&c.Gender,
+		&c.Address.Street,
+		&c.Address.Number,
+		&c.Address.Complement,
+		&c.Address.District,
+		&c.Address.City,
+		&c.Address.State,
+		&c.Address.ZipCode,
 	)
 
 	if err != nil {
@@ -46,6 +56,91 @@ func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.C
 
 	return &c, nil
 
+}
+
+func (r *CustomerRepository) FindByCPF(ctx context.Context, cpf string) (*entity.Customer, error) {
+	cleanCPF := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(cpf, ".", ""), "-", ""), " ", "")
+
+	query := `
+		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0), 
+		       COALESCE(gateway_id, ''), COALESCE(subscription_id, ''), COALESCE(status, ''),
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
+		FROM customers
+		WHERE cpf_cnpj = $1
+		LIMIT 1
+	`
+
+	row := r.DB.QueryRowContext(ctx, query, cleanCPF)
+
+	var c entity.Customer
+	err := row.Scan(
+		&c.ID,
+		&c.Name,
+		&c.Email,
+		&c.CPF,
+		&c.Phone,
+		&c.BirthDate,
+		&c.Gender,
+		&c.GatewayID,
+		&c.SubscriptionID,
+		&c.Status,
+		&c.Address.Street,
+		&c.Address.Number,
+		&c.Address.Complement,
+		&c.Address.District,
+		&c.Address.City,
+		&c.Address.State,
+		&c.Address.ZipCode,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}
+
+func (r *CustomerRepository) FindByEmailAndProductID(ctx context.Context, email, productID string) (*entity.Customer, error) {
+	query := `
+		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0), 
+		       COALESCE(gateway_id, ''), COALESCE(subscription_id, ''), COALESCE(status, ''),
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
+		FROM customers
+		WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+		  AND LOWER(TRIM(product_id::text)) = LOWER(TRIM($2))
+		LIMIT 1
+	`
+
+	row := r.DB.QueryRowContext(ctx, query, strings.TrimSpace(email), strings.TrimSpace(productID))
+
+	var c entity.Customer
+	err := row.Scan(
+		&c.ID,
+		&c.Name,
+		&c.Email,
+		&c.CPF,
+		&c.Phone,
+		&c.BirthDate,
+		&c.Gender,
+		&c.GatewayID,
+		&c.SubscriptionID,
+		&c.Status,
+		&c.Address.Street,
+		&c.Address.Number,
+		&c.Address.Complement,
+		&c.Address.District,
+		&c.Address.City,
+		&c.Address.State,
+		&c.Address.ZipCode,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
 }
 
 func (r *CustomerRepository) CheckDuplicity(ctx context.Context, email, cpf string) (bool, error) {
@@ -87,68 +182,63 @@ func (r *CustomerRepository) FindByGatewayID(gatewayID string) (*entity.Customer
 }
 
 func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) error {
+	// Helper para converter string vazia em nil (evita erro de UUID inválido)
+	toNull := func(s string) interface{} {
+		if s == "" {
+			return nil
+		}
+		return s
+	}
+
+	// DEBUG: Log detalhado de todos os IDs antes de tentar inserir
+	log.Printf("[DEBUG] Inserindo Customer no DB:")
+	log.Printf("-> ID: '%s', ProductID: '%s', PlanID: '%s', GatewayID: '%s', SubID: '%s'",
+		c.ID, c.ProductID, c.PlanID, c.GatewayID, c.SubscriptionID)
+
 	query := `
-		INSERT INTO customers (
-			id, 
-			product_id,     -- 🆕 $2 (A causa do erro FK)
-			plan_id,        -- 🔙 $3 (Adicionei de volta pra não perder)
-			name, 
-			email, 
-			cpf_cnpj, 
-			phone,
-			birth_date,
-			gender,
-			gateway_id,
-			subscription_id,
-			status,
-			street,
-			number,
-			complement,
-			district,
-			city,
-			state,
-			zip_code,
-			created_at, 
-			updated_at,
-			terms_accepted,    -- $22
-			terms_accepted_at, -- $23
-			terms_version      -- $24
-		)
-		VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-			$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
-			$21, $22, $23, $24
-		)
-	`
+        INSERT INTO customers (
+            id, product_id, plan_id, name, email, cpf_cnpj, phone, birth_date,
+            gender, gateway_id, subscription_id, status, street, number, complement,
+            district, city, state, zip_code, created_at, updated_at, terms_accepted,
+            terms_accepted_at, terms_version
+        )
+        VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
+            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
+            $21, $22, $23, $24
+        )
+    `
 
 	_, err := r.DB.ExecContext(ctx, query,
-		c.ID,                 // $1
-		c.ProductID,          // $2 (A CORREÇÃO: Passando o ID do Produto aqui)
-		c.PlanID,             // $3 (Passando o ID do Plano aqui)
-		c.Name,               // $4
-		c.Email,              // $5
-		c.CPF,                // $6
-		c.Phone,              // $7
-		c.BirthDate,          // $8
-		c.Gender,             // $9
-		c.GatewayID,          // $10
-		c.SubscriptionID,     // $11
-		c.Status,             // $12
-		c.Address.Street,     // $13
-		c.Address.Number,     // $14
-		c.Address.Complement, // $15
-		c.Address.District,   // $16
-		c.Address.City,       // $17
-		c.Address.State,      // $18
-		c.Address.ZipCode,    // $19
-		c.CreatedAt,          // $20
-		c.UpdatedAt,          // $21
-		c.TermsAccepted,      // $22
-		c.TermsAcceptedAt,    // $23
-		c.TermsVersion,       // $24
+		c.ID,                     // $1 (UUID obrigatório)
+		toNull(c.ProductID),      // $2 (UUID ou NULL)
+		toNull(c.PlanID),         // $3 (UUID ou NULL)
+		c.Name,                   // $4
+		c.Email,                  // $5
+		c.CPF,                    // $6
+		c.Phone,                  // $7
+		c.BirthDate,              // $8
+		c.Gender,                 // $9
+		toNull(c.GatewayID),      // $10
+		toNull(c.SubscriptionID), // $11
+		c.Status,                 // $12
+		c.Address.Street,         // $13
+		c.Address.Number,         // $14
+		c.Address.Complement,     // $15
+		c.Address.District,       // $16
+		c.Address.City,           // $17
+		c.Address.State,          // $18
+		c.Address.ZipCode,        // $19
+		c.CreatedAt,              // $20
+		c.UpdatedAt,              // $21
+		c.TermsAccepted,          // $22
+		c.TermsAcceptedAt,        // $23
+		c.TermsVersion,           // $24
 	)
 
 	if err != nil {
+		// LOG DE ERRO REAL
+		log.Printf("[ERROR] SQL INSERT falhou: %v", err)
 		return fmt.Errorf("erro no insert do cliente: %w", err)
 	}
 
@@ -166,12 +256,32 @@ func (r *CustomerRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-
 func (r *CustomerRepository) UpdateProviderID(ctx context.Context, customerID, providerID string) error {
 	query := `UPDATE customers SET provider_id = $1, updated_at = NOW() WHERE id = $2`
 	_, err := r.DB.ExecContext(ctx, query, providerID, customerID)
 	if err != nil {
 		return fmt.Errorf("erro ao atualizar provider_id: %w", err)
 	}
+	return nil
+}
+func (r *CustomerRepository) UpdateGatewayID(ctx context.Context, customerID, gatewayID string) error {
+	query := `UPDATE customers SET gateway_id = $1, updated_at = NOW() WHERE id = $2`
+	result, err := r.DB.ExecContext(ctx, query, gatewayID, customerID)
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar gateway_id: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("🔄 UpdateGatewayID: customer_id=%s gateway_id=%s rows_affected=%d", customerID, gatewayID, rowsAffected)
+	return nil
+}
+
+func (r *CustomerRepository) UpdateStatus(ctx context.Context, customerID, status string) error {
+	query := `UPDATE customers SET status = $1, updated_at = NOW() WHERE id = $2`
+	result, err := r.DB.ExecContext(ctx, query, status, customerID)
+	if err != nil {
+		return fmt.Errorf("erro ao atualizar status do customer: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Printf("🔄 UpdateStatus (customer): customer_id=%s status=%s rows_affected=%d", customerID, status, rowsAffected)
 	return nil
 }

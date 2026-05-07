@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/xavierca1/ligue-payments/internal/infra/http/middleware"
 )
-
 
 type ActivationPayload struct {
 	CustomerID string `json:"customer_id"`
@@ -17,7 +18,6 @@ type ActivationPayload struct {
 
 	Provider string `json:"provider"` // <--- Adicione
 	Origin   string `json:"origin"`   // <--- Adicione
-
 
 	Name      string `json:"name"`
 	Email     string `json:"email"`
@@ -35,7 +35,6 @@ type RabbitMQProducer struct {
 	Ch   *amqp.Channel
 }
 
-
 func NewProducer(conn *amqp.Connection, ch *amqp.Channel) *RabbitMQProducer {
 	return &RabbitMQProducer{
 		Conn: conn,
@@ -50,7 +49,6 @@ func (p *RabbitMQProducer) PublishActivation(ctx context.Context, payload Activa
 		return fmt.Errorf("erro ao converter payload: %v", err)
 	}
 
-
 	err = p.Ch.PublishWithContext(ctx,
 		ExchangeName, // ex.checkout
 		RoutingKey,   // k.activation
@@ -59,6 +57,7 @@ func (p *RabbitMQProducer) PublishActivation(ctx context.Context, payload Activa
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         body,
+			Timestamp:    time.Now().UTC(),
 			DeliveryMode: amqp.Persistent, // Mensagem salva no disco (segurança!)
 		},
 	)
@@ -66,6 +65,8 @@ func (p *RabbitMQProducer) PublishActivation(ctx context.Context, payload Activa
 	if err != nil {
 		return fmt.Errorf("falha ao publicar no RabbitMQ: %v", err)
 	}
+
+	middleware.RecordQueuePublished(QueueName, RoutingKey)
 
 	return nil
 }

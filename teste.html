@@ -1,0 +1,2493 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Novo Layout Marketing</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3b5bdb;
+            --secondary-color: #42D393;
+            --primary-hover: #2b45b0;
+            --title-color: #2b2b2b;
+            --bg-color: #f4f7fb;
+            --success-box: #5b9ea6;
+        }
+
+        /* ISOLAMENTO GREATPAGES */
+        .gp-wrapper * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+        }
+
+        .gp-wrapper {
+            width: 100%;
+            min-height: 100vh;
+            background-color: transparent; 
+        }
+        .gp-wrapper, .gp-wrapper body {
+            min-height: 100vh;
+        }
+        
+        .gp-wrapper .row {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            margin-right: -0.5rem !important;
+            margin-left: -0.5rem !important;
+        }
+        
+        .btn-custom-primary { background-color: var(--primary-color) !important; color: white !important; border: none; font-weight: 700; border-radius: 8px; }
+        .btn-custom-primary:hover { background-color: var(--primary-hover) !important; color: white !important; }
+        .btn-custom-primary:disabled { background-color: #a0b2eb !important; color: white !important; }
+        
+        .text-custom-primary { color: var(--primary-color) !important; }
+        
+        /* NOVO TOGGLE INDIVIDUAL / FAMILIAR */
+        .plan-toggle-container {
+            display: inline-flex;
+            background: white;
+            border: 1px solid #ced4da;
+            border-radius: 30px;
+            padding: 4px;
+            margin-bottom: 30px;
+        }
+        .plan-toggle-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 24px;
+            font-weight: 700;
+            color: #6c757d;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .plan-toggle-btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* NOVO DESIGN DOS CARDS */
+        .plans-grid {
+            justify-content: center;
+            column-gap: 0;
+            row-gap: 15px;
+        }
+        .plan-option {
+            display: flex;
+            width: 100%;
+            max-width: 300px; /* Mantém os cards com um bom tamanho */
+            margin: 0 auto;
+        }
+
+        /* Individual: sempre 3 cards na mesma linha (desktop) */
+        .individual-plans .plan-option {
+            max-width: none;
+            height: 100%;
+        }
+        .individual-plans > .col-md-4 {
+            display: flex;
+            align-items: stretch;
+        }
+        @media (min-width: 768px) {
+            .individual-plans > .col-md-4 {
+                flex: 0 0 33.333333% !important;
+                max-width: 33.333333% !important;
+            }
+        }
+        .plan-card { 
+            cursor: pointer; 
+            transition: all 0.2s ease-in-out; 
+            border: 2px solid transparent !important; 
+            border-radius: 16px !important;
+            position: relative; 
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 30px 20px 20px 20px !important;
+            margin-top: 15px; /* Espaço para o badge flutuante */
+        }
+        
+        /* Badge do Nome do Plano (Flutuante) */
+        .plan-badge-title {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 6px 16px;
+            border-radius: 20px;
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            z-index: 2;
+        }
+
+        .plan-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+        
+        /* Estado Selecionado */
+        .plan-input:checked + .plan-card { 
+            border: 2px solid var(--primary-color) !important; 
+            box-shadow: 0 0 0 4px rgba(59, 91, 219, 0.1) !important;
+        }
+        .plan-input { display: none; }
+
+        /* Descrição */
+        .plan-desc {
+            font-size: 13px !important;
+            line-height: 1.5 !important;
+            color: #4a4a4a !important;
+            margin-bottom: 20px !important;
+            list-style: none !important;
+            padding-left: 0 !important;
+            text-align: left;
+            flex-grow: 1; /* Empurra o preço pra baixo */
+        }
+        .plan-desc li { margin-bottom: 8px; position: relative; padding-left: 12px;}
+        .plan-desc li::before { 
+            content: "•"; 
+            position: absolute;
+            left: 0;
+            color: #4a4a4a;
+            font-weight: bold;
+        }
+
+        /* Caixa de Preço Verde */
+        .plan-price-box {
+            border: 2px solid var(--secondary-color);
+            color: var(--secondary-color);
+            font-size: 1.25rem !important;
+            font-weight: 800 !important;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: auto;
+        }
+        .plan-price-box span { font-size: 1rem; font-weight: 600; }
+
+        /* Badge "Mais Popular" - Destaque especial */
+        .plan-popular-badge {
+            position: absolute;
+            top: -10px;
+            right: -25px;
+            background: linear-gradient(135deg, var(--secondary-color) 0%, #2bdb7d 100%);
+            color: white;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            /* box-shadow: 0 4px 12px rgba(66, 211, 147, 0.3); */
+            z-index: 3;
+        }
+
+        /* Card destacado como popular */
+        .plan-card.popular-plan {
+            /* border: 3px solid var(--secondary-color) !important; */
+            /* box-shadow: 0 8px 24px rgba(66, 211, 147, 0.2) !important; */
+            transform: scale(1.03);
+        }
+
+        .plan-card.popular-plan:hover {
+            transform: scale(1.03) translateY(-3px);
+            /* box-shadow: 0 12px 32px rgba(66, 211, 147, 0.25) !important; */
+        }
+
+        /* Payment method badges */
+        .payment-method-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .payment-method-badge.active {
+            border-color: currentColor;
+            opacity: 1;
+        }
+
+        .payment-method-badge.inactive {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .payment-method-badge.credit-card {
+            color: var(--primary-color);
+            background: rgba(59, 91, 219, 0.08);
+        }
+
+        .payment-method-badge.pix {
+            color: #9f1d48;
+            background: rgba(159, 29, 72, 0.08);
+        }
+
+        .payment-method-badge.pix.active {
+            background: rgba(159, 29, 72, 0.15);
+        }
+
+        /* Botão gerar QR Code */
+        .btn-generate-qr {
+            background: linear-gradient(135deg, #9f1d48 0%, #c41e3a 100%);
+            border: none;
+            color: white;
+            font-weight: 700;
+            padding: 12px 24px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-bottom: 16px;
+        }
+
+        .btn-generate-qr:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(196, 30, 58, 0.3);
+            color: white;
+        }
+
+        .btn-generate-qr:disabled {
+            background: #ccc;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        /* Timer PIX */
+        .pix-timer {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            background: #fffbea;
+            border: 2px solid #ffc107;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-weight: 700;
+            color: #ff9800;
+        }
+
+        .pix-timer i {
+            font-size: 1.2rem;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* Micro-copy no footer do pedido */
+        .micro-copy-no-commitment {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            font-weight: 500;
+            margin-top: 12px;
+            line-height: 1.4;
+            text-align: center;
+        }
+
+        /* Bloqueio de alternância PIX */
+        .nav-link.disabled-payment-method {
+            pointer-events: none;
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Esconder Steps */
+        #step2, #step3, #step4 { display: none; }
+        .gp-wrapper .row.individual-plans,
+        .gp-wrapper .row.familiar-plans { display: none !important; }
+        .gp-wrapper .row.active-plan-group { display: flex !important; }
+        
+        /* Steps do Topo */
+        .step-indicator-wrapper {
+            background: white;
+            border: 1px solid #ced4da;
+            border-radius: 30px;
+            padding: 8px 15px;
+            display: inline-flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .step-indicator { 
+            font-size: 0.9rem !important; 
+            font-weight: 700 !important; 
+            color: var(--secondary-color) !important;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+        .step-indicator:hover { color: var(--secondary-color) !important; }
+        .step-indicator.active { color: var(--secondary-color) !important; }
+
+        /* Sucesso */
+        .success-box {
+            background-color: var(--success-box);
+            color: white;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: left;
+            margin: 20px auto;
+            max-width: 600px;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .social-links img { width: 24px; margin-right: 8px; vertical-align: middle; }
+        .social-links a { color: #2b2b2b; text-decoration: none; font-weight: 700; margin-right: 20px; display: inline-block; margin-bottom: 10px;}
+
+        .checkout-header {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 10px 16px 8px 16px;
+            margin-bottom: 18px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+            border: 1px solid rgba(59, 91, 219, 0.08);
+        }
+        .checkout-header img {
+            display: block;
+            margin: 0 auto;
+            max-width: 170px;
+            width: 100%;
+            height: auto;
+        }
+
+        .checkout-footer {
+            background: var(--secondary-color);
+            color: #ffffff;
+            border-radius: 18px;
+            padding: 24px 20px;
+            margin-top: 28px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+        }
+        .checkout-footer a {
+            color: #ffffff;
+            text-decoration: none;
+        }
+        .trust-badges {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        .trust-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 999px;
+            padding: 8px 14px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .trust-badge i {
+            font-size: 1rem;
+            line-height: 1;
+        }
+
+        .lookup-banner {
+            border-radius: 14px;
+            border: 1px solid rgba(59, 91, 219, 0.12);
+            background: #f8faff;
+        }
+
+        .payment-tab-content .nav-link.disabled,
+        .payment-tab-content .nav-link:disabled {
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        .dependent-card {
+            border: 1px solid #dbe3ff;
+            border-radius: 10px;
+            background: #fff;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+        .coupon-ok { color: #198754 !important; }
+        .coupon-error { color: #dc3545 !important; }
+
+        .field-error-inline {
+            display: block;
+            color: #dc3545;
+            font-size: 0.82rem;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        input[readonly] { background-color: #f5f5f5 !important; cursor: not-allowed; opacity: 0.85; }
+        .nav-pills .nav-link { color: #6c757d !important; }
+        .nav-pills .nav-link.active { background-color: var(--primary-color) !important; color: white !important; }
+        .payment-tab-content { display: none; padding-top: 15px; }
+        .payment-tab-content.active { display: block; }
+
+        /* Reset GreatPages */
+        #site.gpc-site { min-width: auto !important; overflow: visible !important; }
+        .checkout-gpc-block.gpc-b { min-height: auto !important; background: transparent !important; border: 0 !important; }
+        .checkout-gpc-block .gpc-b_sobreposicao { display: none !important; }
+        .checkout-gpc-block .gp-centralizar.centralizar {
+            width: 100% !important; max-width: 1140px !important; min-height: 100vh !important; margin: 0 auto !important; box-sizing: border-box !important; padding-left: 12px !important; padding-right: 12px !important; display: flex !important; flex-direction: column !important;
+        }
+        .checkout-gpc-block .gp-centralizar > .w-100 {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .checkout-gpc-block .w-100 > form {
+            flex: 1 1 auto;
+        }
+    </style>
+</head>
+<body class="gpc-body">
+
+<div id="site" class="gpc-site gp-wrapper">
+    <div class="gpc-b checkout-gpc-block">
+        <div class="gpc-b_sobreposicao"></div>
+        <div class="centralizar gp-centralizar py-2">
+
+    <div class="checkout-header text-center">
+        <img src="https://yntprscrhdlrwkgnmzrb.supabase.co/storage/v1/object/public/public-assets/logo/logo.png" alt="Ligue Medicina">
+    </div>
+
+    <div class="w-100">
+        <div class="text-center step-indicators-container">
+            <h2 class="fw-bold mb-1 text-primary">Escolha o Seu Plano Ideal</h2>
+            <p class="text-primary mb-3">Selecione a melhor opção</p>
+            
+            <div class="step-indicator-wrapper">
+                <span class="step-indicator active" id="indStep1" onclick="goToStep(1)">1. Plano</span>
+                <span class="step-indicator" id="indStep2" onclick="goToStep(2)">2. Dados Pessoais</span>
+                <span class="step-indicator" id="indStep3" onclick="goToStep(3)">3. Pagamento</span>
+            </div>
+        </div>
+
+        <form id="checkoutForm">
+            
+            <div id="step1" class="text-center">
+                
+                <div class="plan-toggle-container">
+                    <button type="button" class="plan-toggle-btn active" data-plan-type="individual" onclick="togglePlanType('individual', this)">Individual</button>
+                    <button type="button" class="plan-toggle-btn" data-plan-type="familiar" onclick="togglePlanType('familiar', this)">Familiar</button>
+                </div>
+                
+                <div class="row plans-grid individual-plans justify-content-center" data-plan-group="individual">
+                    <div class="col-md-4">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="230265d3-3d12-4530-b896-147387003271" data-product-id="15b4965d-c234-410c-83ae-ac826051e672" data-name="Ligue Saúde em Dia" data-price="39,90" data-family="false" data-max-dependents="0" class="plan-input">
+                            <div class="card plan-card text-center">
+                                <div class="plan-badge-title">Ligue Saúde em Dia</div>
+                                <p class="small text-muted mt-2 fw-semibold">Resolva o básico sem complicação quando precisar.</p>
+                                <ul class="plan-desc">
+                                    <li>Atendimento com <strong>Clínico Geral 24h</strong> todos os dias;</li>
+                                    <li><strong>Pediatria</strong> disponível para cuidar de quem mais importa;</li>
+                                    <li>Ideal para emergências e atendimentos rápidos no dia a dia.</li>
+                                </ul>
+                                <div class="plan-price-box">R$39,90<span>/mês</span></div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="ca7a08cd-018e-4aec-8bb1-715ce54eb6fd" data-product-id="15b4965d-c234-410c-83ae-ac826051e672" data-name="Ligue Vida Plena" data-price="47,66" data-family="false" data-max-dependents="0" class="plan-input">
+                            <div class="card plan-card popular-plan text-center">
+                                <div class="plan-popular-badge">Mais Popular</div>
+                                <div class="plan-badge-title">Ligue Vida Plena</div>
+                                <p class="small text-muted mt-2 fw-semibold">O plano <u>mais escolhido</u> para quem quer segurança e praticidade no dia a dia.</p>
+                                <ul class="plan-desc">
+                                    <li>Atendimento com <strong>Clínico Geral 24h</strong> todos os dias;</li>
+                                    <li><strong>2 consultas</strong> por mês com especialistas;</li>
+                                    <li>Acesso a <strong>mais de 20</strong> especialidades médicas.</li>
+                                </ul>
+                                <div class="plan-price-box">R$47,66<span>/mês</span></div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="d473ee83-bf52-4927-82c6-d0128e030c3c" data-product-id="15b4965d-c234-410c-83ae-ac826051e672" data-name="Ligue Viver Bem" data-price="69,90" data-family="false" data-max-dependents="0" class="plan-input">
+                            <div class="card plan-card text-center">
+                                <div class="plan-badge-title">Ligue Viver Bem</div>
+                                <p class="small text-muted mt-2 fw-semibold">Cuide da sua <u>saúde mental</u> e faça um acompanhamento contínuo.</p>
+                                <ul class="plan-desc">
+                                    <li>Atendimento com <strong>Clínico Geral 24h</strong> todos os dias;</li>
+                                    <li><strong>4 consultas</strong> mensais com psicólogo.</li>
+                                </ul>
+                                <div class="plan-price-box">R$69,90<span>/mês</span></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="row plans-grid familiar-plans justify-content-center" data-plan-group="familiar">
+                    <div class="col-md-5">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="8f305d38-4c1e-435a-a57b-7c77e2a5f141" data-product-id="15b4965d-c234-410c-83ae-ac826051e672" data-name="Ligue Mais Cuidado" data-price="55,27" data-family="true" data-max-dependents="4" class="plan-input">
+                            <div class="card plan-card text-center">
+                                <div class="plan-badge-title">Ligue Mais Cuidado</div>
+                                <p class="small text-muted mt-2 fw-semibold">Mais proteção para você e sua família!</p>
+                                <ul class="plan-desc">
+                                    <li>Atendimento ilimitado com <strong>Clínico Geral 24h</strong> todos os dias;</li>
+                                    <li><strong>Pediatria 24h</strong> disponível para cuidar de quem mais importa;</li>
+                                    <li>Inclua <strong>até 4 dependentes</strong> sem custo adicional.</li>
+                                </ul>
+                                <div class="plan-price-box">R$55,27<span>/mês</span></div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="plan-option">
+                            <input type="radio" name="plan" value="255f7631-751d-4edd-a165-65a0c55824eb" data-product-id="15b4965d-c234-410c-83ae-ac826051e672" data-name="Ligue Cuidado Total" data-price="60,00" data-family="true" data-max-dependents="4" class="plan-input">
+                            <div class="card plan-card text-center">
+                                <div class="plan-badge-title">Ligue Cuidado Total</div>
+                                <p class="small text-muted mt-2 fw-semibold">Cobertura completa para toda a família em um único plano.</p>
+                                <ul class="plan-desc">
+                                    <li>Atendimento ilimitado com <strong>Clínico Geral 24h</strong> todos os dias;</li>
+                                    <li>Consultas agendadas com <strong>especialistas</strong>;</li>
+                                    <li>Acesso a <strong>mais de 20</strong> especialidades médicas, incluindo psicologia;</li>
+                                    <li>Inclua <strong>até 4 dependentes</strong> sem custo adicional.</li>
+                                </ul>
+                                <div class="plan-price-box">R$60,00<span>/mês</span></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="mt-5">
+                    <button type="button" class="btn btn-custom-primary px-5 py-3 fs-5" id="btnNextToStep2" onclick="handleBeginCheckoutClick()" disabled style="min-width: 200px;">
+                        Continuar
+                    </button>
+                </div>
+            </div>
+
+            <div id="step2">
+                <div class="card shadow-sm border-0 p-4" style="border-radius: 12px; background: #fff;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="mb-0 text-primary fw-bold">Dados Pessoais</h4>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToStep(1)">Voltar</button>
+                    </div>
+                    
+                    <div class="alert alert-light border d-flex justify-content-between mb-4">
+                        <span>Plano selecionado: <strong id="lblPlanNameStep2">---</strong></span>
+                        <strong id="lblPlanPriceStep2" class="text-success">R$ 0,00</strong>
+                    </div>
+
+                    <div id="cpfLookupBanner" class="alert lookup-banner d-none mb-4">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle-fill text-primary"></i>
+                            <div>
+                                <div class="fw-bold text-primary">Validando seu CPF</div>
+                                <div id="cpfLookupBannerText" class="small text-secondary">Vamos verificar seu cadastro antes de seguir para o pagamento.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card border-0 bg-light p-3 mb-4">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-8">
+                                <label class="form-label fw-semibold small">Cupom de desconto</label>
+                                <input type="text" class="form-control text-uppercase" id="couponCode" placeholder="INSIRA O CODIGO DE CUPOM" maxlength="64">
+                            </div>
+                            <div class="col-md-4 d-grid">
+                                <button type="button" class="btn btn-outline-primary fw-bold" id="btnValidateCoupon">Validar cupom</button>
+                            </div>
+                        </div>
+                        <small id="couponFeedback" class="d-block mt-2 text-muted">Se tiver cupom, valide antes de ir para o pagamento.</small>
+                    </div>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-semibold small">Nome Completo</label>
+                            <input type="text" class="form-control" id="clientName" placeholder="Nome completo" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">E-mail</label>
+                            <input type="email" class="form-control" id="clientEmail" placeholder="E-mail" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">CPF</label>
+                            <input type="text" class="form-control" id="clientCpf" placeholder="CPF" maxlength="11" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Telefone</label>
+                            <input type="tel" class="form-control" id="clientPhone" placeholder="Telefone" maxlength="11" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Data de Nascimento</label>
+                            <input type="date" class="form-control" id="clientBirth" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Sexo</label>
+                            <select class="form-select" id="clientGender" required>
+                                <option value="">Selecione</option>
+                                <option value="1">Masculino</option>
+                                <option value="2">Feminino</option>
+                                <option value="3">Outro</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold small">Estado Civil</label>
+                            <select class="form-select" id="clientCivil" required>
+                                <option value="">Selecione</option>
+                                <option value="Solteiro">Solteiro(a)</option>
+                                <option value="Casado">Casado(a)</option>
+                                <option value="Divorciado">Divorciado(a)</option>
+                                <option value="Viúvo">Viúvo(a)</option>
+                                <option value="União Estável">União Estável</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="fw-bold mb-3 text-primary">Endereço</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">CEP</label>
+                            <input type="text" class="form-control" id="clientZip" placeholder="CEP" maxlength="8">
+                            <small class="form-text text-danger d-none" id="cepError"></small>
+                            <small class="form-text text-muted d-none" id="cepLoading">Buscando endereço...</small>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold small">Rua/Logradouro</label>
+                            <input type="text" class="form-control" id="clientStreet" placeholder="Rua/Logradouro">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Número</label>
+                            <input type="text" class="form-control" id="clientNumber" placeholder="Número">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold small">Complemento</label>
+                            <input type="text" class="form-control" id="clientComplement" placeholder="Complemento">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Bairro</label>
+                            <input type="text" class="form-control" id="clientDistrict">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold small">Cidade</label>
+                            <input type="text" class="form-control" id="clientCity" placeholder="Cidade">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold small">UF</label>
+                            <input type="text" class="form-control" id="clientState" placeholder="UF" maxlength="2">
+                        </div>                        
+                    </div>
+
+                    <div class="p-3 bg-light rounded border mb-4">
+                        <div class="form-check">
+                            <input class="form-check-input border-secondary" type="checkbox" id="termsCheck">
+                            <label class="form-check-label fw-bold small" for="termsCheck">
+                                Eu li e aceito os <a href="#" data-bs-toggle="modal" data-bs-target="#termsModal">Termos de Serviço</a>.
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="card border-0 bg-light p-3 mb-4" id="dependentsSection" style="display:none;">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="fw-bold mb-0 text-primary">Dependentes do plano familiar</h6>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="btnAddDependent">+ Adicionar dependente</button>
+                        </div>
+                        <small id="dependentsHint" class="text-muted d-block mb-2"></small>
+                        <div id="dependentsContainer"></div>
+                    </div>
+
+                    <div id="step2ValidationFeedback" class="alert alert-warning d-none small"></div>
+
+                    <button type="button" class="btn btn-custom-primary w-100 py-3 fs-5" id="btnNextToStep3" onclick="handleDadosClick()" disabled>
+                        Ir para Pagamento
+                    </button>
+                </div>
+            </div>
+
+            <div id="step3">
+                <div class="card shadow-sm border-0 p-4" style="border-radius: 12px; background: #fff;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h4 class="mb-0 text-primary fw-bold">Pagamento</h4>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="goToStep(2)">Voltar</button>
+                    </div>
+
+                    <div class="alert alert-light border d-flex justify-content-between mb-4">
+                        <span>Plano: <strong id="lblPlanNameStep3">---</strong></span>
+                        <strong id="lblPlanPriceStep3" class="text-success">R$ 0,00</strong>
+                    </div>
+                    <div id="discountSummaryStep3" class="small text-success fw-semibold mb-3" style="display:none;"></div>
+
+                    <div class="d-flex gap-3 justify-content-center mb-4" id="paymentMethodBadges">
+                        <div class="payment-method-badge credit-card active" data-method="CREDIT_CARD">
+                            <i class="bi bi-credit-card"></i> Cartão de Crédito
+                        </div>
+                        <div class="payment-method-badge pix" id="pixBadge" data-method="PIX">
+                            <i class="bi bi-qr-code"></i> PIX
+                        </div>
+                    </div>
+                    <ul class="nav nav-pills mb-3" id="paymentTabs" style="display: none;">
+                        <li class="nav-item">
+                            <button class="nav-link active fw-semibold" type="button" data-method="CREDIT_CARD">Cartão de Crédito</button>
+                        </li>
+                        <li class="nav-item ms-2">
+                            <button class="nav-link fw-semibold" type="button" data-method="PIX">PIX</button>
+                        </li>
+                    </ul>
+                    <input type="hidden" id="paymentMethod" value="CREDIT_CARD">
+                    <input type="hidden" id="pixQrGenerated" value="false">
+
+                    <div id="creditCardSection" class="payment-tab-content active bg-light p-3 rounded border">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-semibold small">Número do Cartão</label>
+                                <input type="text" class="form-control" id="cardNumber" maxlength="19" placeholder="Número do cartão">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label fw-semibold small">Nome impresso no cartão</label>
+                                <input type="text" class="form-control" id="cardName" placeholder="Nome impresso no cartão">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold small">Validade (MM/AA)</label>
+                                <input type="text" class="form-control" id="cardExpiry" maxlength="5" placeholder="MM/AA">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-semibold small">CVV</label>
+                                <input type="text" class="form-control" id="cardCvv" maxlength="4" placeholder="CVV">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="pixSection" class="payment-tab-content bg-light p-3 rounded border">
+                        <div id="pixInlineContainer" class="text-center">
+                            <div class="alert alert-success mb-0">
+                                Clique abaixo para gerar seu QR Code PIX e realizar o pagamento.
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-generate-qr" id="generateQrBtn" style="margin-top: 12px;">
+                            <i class="bi bi-qr-code me-2"></i> Gerar QR Code PIX
+                        </button>
+                        <div id="pixTimer" class="pix-timer" style="display: none;">
+                            <i class="bi bi-hourglass-split"></i>
+                            <span id="timerDisplay">30:00</span>
+                        </div>
+                        <div id="pixQrContainer" style="display: none; margin-top: 16px; text-align: center;"></div>
+                    </div>
+
+                    <button type="button" class="btn btn-custom-primary w-100 py-3 mt-4 fs-5" id="finalSubmitBtn" disabled>
+                        Finalizar Pedido
+                        <div class="micro-copy-no-commitment">Sem fidelidade. Cancele quando quiser.</div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="step4" class="text-center">
+                
+                <div class="mb-2"><i class="bi bi-check-circle-fill text-success" style="font-size: 4.5rem;"></i></div>
+                <h2 class="text-primary fw-bold mt-3">Parabéns! Sua contratação foi realizada com sucesso.</h2>
+                <p class="text-primary fs-5">Agora você terá acesso a um cuidado mais completo com a sua saúde!</p>
+
+                <div class="success-box">
+                    <p class="mb-0">
+                        Em instantes, você receberá um <strong>e-mail</strong> com todas as instruções de acesso.<br>
+                        Seu cadastro já está em processo de ativação e muito em breve você poderá utilizar seus benefícios.
+                    </p>
+                </div>
+
+                <div class="mt-4">
+                    <p class="text-muted mb-3">Em caso de dúvidas, contate nossa equipe e visite nossos canais:</p>
+                    <div class="social-links d-flex justify-content-center flex-wrap">
+                        <a href="https://wa.me/5561996988861" target="_blank" rel="noreferrer"><i class="bi bi-whatsapp" style="font-size: 1.2rem;"></i> (61) 99698-8861</a>
+                        <a href="https://www.instagram.com/liguemedicina" target="_blank" rel="noreferrer"><i class="bi bi-instagram" style="font-size: 1.2rem;"></i> liguemedicina</a>
+                        <a href="https://www.tiktok.com/@ligue.medicina" target="_blank" rel="noreferrer"><i class="bi bi-tiktok" style="font-size: 1.2rem;"></i> ligue.medicina</a>
+                    </div>
+                </div>
+            </div>
+
+        </form>
+
+        <footer class="checkout-footer text-center">
+            <div class="fw-bold mb-2">Ligue Medicina</div>
+            <div class="mb-2">CNPJ: 46.564.104/0001-20</div>
+            <div class="mb-2">
+                WhatsApp <a href="https://wa.me/5561996988861" target="_blank" rel="noreferrer">(61) 99698-8861</a> |
+                E-mail <a href="mailto:comercial@liguemedicina.com">comercial@liguemedicina.com</a>
+            </div>
+            <div>Copyright © Ligue Medicina – Todos os direitos reservados.</div>
+
+            <div class="trust-badges" aria-label="Certificados de site seguro">
+                <span class="trust-badge"><i class="bi bi-shield-lock-fill" aria-hidden="true"></i> Site Seguro</span>
+                <span class="trust-badge"><i class="bi bi-patch-check-fill" aria-hidden="true"></i> Dados Protegidos</span>
+                <span class="trust-badge"><i class="bi bi-lock-fill" aria-hidden="true"></i> SSL Criptografado</span>
+            </div>
+        </footer>
+
+    </div>
+</div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="termsModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Termos e Assinatura</h3>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-muted small">
+                
+                <p>É facultado à mim acessar todos e quaisquer serviços e produtos disponibilizados pelos parceiros e empresas conveniadas;</p>
+                <p>Somente terei direito à utilização dos benefícios oferecidos pela LIGUE MEDICINA a partir do dia posterior ao
+primeiro débito efetuado em minha conta, respeitando o período de carência, e enquanto estiver contribuindo com
+as mensalidades associativas;</p>
+<p>O cancelamento da contribuição associativa poderá ocorrer de forma facultativa, porém deverá ser expresso, por
+meio de requerimento por mim assinado e datado, atendimento telefônico, com a suspensão dos débitos
+associativos podendo ocorrer em até 30 (trinta) dias após a data do requerimento</p>
+                <p>O referido cancelamento poderá ocorrer também de forma automática por meu falecimento.
+</p>
+<p>Declaro, ainda, que as informações cadastrais informadas acima são verdadeiras. É anexo a este documento o Termo
+de Autorização para o Débito em Conta, no qual fica autorizado a proceder com o débito da mensalidade associativa
+em conta bancária.
+ </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi</button>
+            </div>
+        </div>a
+    </div>
+</div>
+
+<div class="modal fade" id="activeCpfModal" tabindex="-1" aria-labelledby="activeCpfModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="activeCpfModalLabel">
+                    <i class="bi bi-heart-fill me-2" style="color:#42D393"></i>
+                    Você já é de casa!
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p id="activeCpfModalMessage" class="mb-0 text-secondary"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.11.13/bundle/libphonenumber-max.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    ;(function () {
+        var step1 = document.getElementById('step1');
+        var step2 = document.getElementById('step2');
+        var step3 = document.getElementById('step3');
+        var step4 = document.getElementById('step4');
+        var indContainer = document.querySelector('.step-indicators-container');
+
+        var planInputs = document.querySelectorAll('.plan-input');
+        var btnNextToStep2 = document.getElementById('btnNextToStep2');
+        var btnNextToStep3 = document.getElementById('btnNextToStep3');
+        var finalSubmitBtn = document.getElementById('finalSubmitBtn');
+        var termsCheck = document.getElementById('termsCheck');
+        var CHECKOUT_URL = 'https://nonmolecular-meadow-speechlessly.ngrok-free.dev/checkout';
+        var API_ORIGIN = new URL(CHECKOUT_URL).origin;
+        var COUPON_VALIDATE_URL = API_ORIGIN + '/coupons/validate';
+
+        var paymentTabs = document.querySelectorAll('#paymentTabs .nav-link');
+        var paymentMethodInput = document.getElementById('paymentMethod');
+        var pixStatusInterval = null;
+        var currentPixCustomerId = '';
+        var couponCodeInput = document.getElementById('couponCode');
+        var btnValidateCoupon = document.getElementById('btnValidateCoupon');
+        var couponFeedback = document.getElementById('couponFeedback');
+        var discountSummaryStep3 = document.getElementById('discountSummaryStep3');
+        var dependentsSection = document.getElementById('dependentsSection');
+        var dependentsHint = document.getElementById('dependentsHint');
+        var dependentsContainer = document.getElementById('dependentsContainer');
+        var btnAddDependent = document.getElementById('btnAddDependent');
+        var step2ValidationFeedback = document.getElementById('step2ValidationFeedback');
+        var checkoutForm = document.getElementById('checkoutForm');
+        var cpfLookupBanner = document.getElementById('cpfLookupBanner');
+        var cpfLookupBannerText = document.getElementById('cpfLookupBannerText');
+        var activeCpfModalEl = document.getElementById('activeCpfModal');
+        var activeCpfModalMessage = document.getElementById('activeCpfModalMessage');
+        var activeCpfModal = activeCpfModalEl ? new bootstrap.Modal(activeCpfModalEl) : null;
+        var appliedCoupon = null;
+        var purchaseAlreadyPushed = false;
+        var beginCheckoutPushed = false;
+        var dadosPushed = false;
+        var showStep2InlineErrors = false;
+        var cpfLookupState = {
+            exists: false,
+            status: 'NOT_FOUND',
+            customerId: '',
+            gatewayId: '',
+            message: ''
+        };
+
+        // Compatibilidade GTM: alguns snippets usam `dataLayer.push(...)` diretamente
+        window.dataLayer = window.dataLayer || [];
+        var dataLayer = window.dataLayer;
+        dataLayer.push({ event: 'checkout_page_ready' });
+
+        // Bridge para Wix: recebe eventos via postMessage e repassa ao dataLayer local
+        if (!window.__ligueWixBridgeInstalled) {
+            window.__ligueWixBridgeInstalled = true;
+            window.addEventListener('message', function (ev) {
+                try {
+                    var msg = ev && ev.data;
+                    if (!msg || msg.source !== 'ligue-checkout' || msg.type !== 'datalayer_event' || !msg.payload) return;
+
+                    window.dataLayer = window.dataLayer || [];
+                    if (typeof window.dataLayer.push === 'function') {
+                        window.dataLayer.push({ ecommerce: null });
+                        window.dataLayer.push(msg.payload);
+                    }
+                } catch (e) {}
+            });
+        }
+
+        function getSelectedPlanDataForDL() {
+            var selected = getSelectedPlan();
+            if (!selected) return null;
+
+            var priceText = selected.getAttribute('data-price') || '0';
+            var baseCents = parsePriceToCents(priceText);
+            var discountPercent = appliedCoupon && Number(appliedCoupon.discount_percent) > 0 ? Number(appliedCoupon.discount_percent) : 0;
+            var discountCents = discountPercent > 0 ? Math.floor((baseCents * discountPercent) / 100) : 0;
+            var finalCents = Math.max(0, baseCents - discountCents);
+
+            return {
+                item_id: selected.value || '',
+                item_name: selected.getAttribute('data-name') || '',
+                currency: 'BRL',
+                value: finalCents / 100,
+                discount: discountCents / 100
+            };
+        }
+
+        function pushDataLayerEvent(eventName, extraData) {
+            var plan = getSelectedPlanDataForDL();
+            var dependentsCount = collectDependents().length;
+            var quantity = 1 + dependentsCount;
+            var unitValue = plan ? plan.value : 0;
+            var payload = {
+                event: eventName,
+                ecommerce: {
+                    currency: 'BRL',
+                    value: unitValue,
+                    items: plan ? [{
+                        item_id: plan.item_id,
+                        item_name: plan.item_name,
+                        price: unitValue,
+                        quantity: 1,
+                        discount: plan.discount
+                    }] : []
+                }
+            };
+
+            if (extraData && typeof extraData === 'object') {
+                Object.assign(payload, extraData);
+            }
+
+            // Enriquecimento específico do evento "dados"
+            if (eventName === 'dados') {
+                var fullName = getInputValue('clientName');
+                var nameParts = (fullName || '').trim().split(/\s+/).filter(Boolean);
+                var firstName = nameParts.length ? nameParts[0] : '';
+                var lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                var totalValue = Number((unitValue * quantity).toFixed(2));
+
+                payload.user_data = Object.assign({}, payload.user_data || {}, {
+                    email: getInputValue('clientEmail'),
+                    phone: onlyDigits(getInputValue('clientPhone')),
+                    first_name: firstName,
+                    last_name: lastName,
+                    address: getInputValue('clientStreet'),
+                    city: normalizarTexto(getInputValue('clientCity')),
+                    region: normalizarTexto(getInputValue('clientState')),
+                    country: 'br',
+                    zip: onlyDigits(getInputValue('clientZip')),
+                    cpf: onlyDigits(getInputValue('clientCpf'))
+                });
+
+                payload.checkout = Object.assign({}, payload.checkout || {}, {
+                    quantity: quantity,
+                    value: totalValue,
+                    currency: 'BRL',
+                    items: plan ? [{
+                        item_id: plan.item_id,
+                        item_name: plan.item_name,
+                        price: unitValue,
+                        quantity: quantity,
+                        discount: plan.discount
+                    }] : []
+                });
+
+                // Mantém ecommerce consistente para ferramentas que leem GA4 padrão
+                payload.ecommerce.value = totalValue;
+                if (payload.ecommerce.items && payload.ecommerce.items[0]) {
+                    payload.ecommerce.items[0].quantity = quantity;
+                }
+            }
+
+            function safePush(win, data) {
+                try {
+                    if (!win) return;
+                    win.dataLayer = win.dataLayer || [];
+                    if (typeof win.dataLayer.push === 'function') {
+                        // padrão GTM para evitar merge de ecommerce de eventos anteriores
+                        win.dataLayer.push({ ecommerce: null });
+                        win.dataLayer.push(data);
+                    }
+                } catch (e) {}
+            }
+
+            safePush(window, payload);
+
+            // ambientes como GreatPages podem encapsular scripts; tenta parent/top também
+            try {
+                if (window.parent && window.parent !== window) {
+                    safePush(window.parent, payload);
+                }
+            } catch (e) {}
+
+            try {
+                if (window.top && window.top !== window && window.top !== window.parent) {
+                    safePush(window.top, payload);
+                }
+            } catch (e) {}
+
+            // debug opcional: no console, execute window.__DL_DEBUG__ = true
+            try {
+                if (window.__DL_DEBUG__ === true) {
+                    console.log('[dataLayer]', eventName, payload);
+                }
+            } catch (e) {}
+
+            // Bridge para Wix/iframe cross-origin: envia para o parent fazer push no dataLayer dele
+            try {
+                if (window.parent && window.parent !== window && typeof window.parent.postMessage === 'function') {
+                    window.parent.postMessage({
+                        source: 'ligue-checkout',
+                        type: 'datalayer_event',
+                        payload: payload
+                    }, '*');
+                }
+            } catch (e) {}
+
+            try {
+                if (window.top && window.top !== window && typeof window.top.postMessage === 'function') {
+                    window.top.postMessage({
+                        source: 'ligue-checkout',
+                        type: 'datalayer_event',
+                        payload: payload
+                    }, '*');
+                }
+            } catch (e) {}
+        }
+
+     window.handleBeginCheckoutClick = function () {
+            try {
+                var selected = getSelectedPlan();
+                if (!selected) {
+                    alert('Por favor, selecione um plano');
+                    return;
+                }
+
+                var planName = selected.getAttribute('data-name') || '';
+                var priceText = selected.getAttribute('data-price') || '0';
+                var planId = selected.value || '';
+
+                // Payload com dados reais do plano
+                const payload = {
+                    event: 'begin_checkout',
+                    transactionId: 'checkout_' + Date.now()+ Math.random(0,1000), // ID único para esta tentativa de checkout
+                    ecommerce: {
+                        currency: 'BRL',
+                        value: parseFloat(priceText.replace(',', '.')),
+                        items: [{
+                            item_id: planId,
+                            item_name: planName,
+                            price: parseFloat(priceText.replace(',', '.')),
+                            quantity: 1
+                        }]
+                    }
+                  
+                };
+
+                // Envia a mensagem para o Wix (Página Pai)
+                window.parent.postMessage(payload, "*");
+                
+                // Navega para próximo step
+                goToStep(2);
+            } catch (e) {
+                console.error('Erro no clique:', e);
+            }
+        };
+
+    window.handleDadosClick = async function () {
+    try {
+        var selected = getSelectedPlan();
+        if (!selected) return;
+
+        showStep2InlineErrors = true;
+        var step2Validation = validateStep2();
+        if (!step2Validation.isValid) {
+            focusFirstInvalidStep2Field(step2Validation.fieldErrors);
+            return;
+        }
+
+        btnNextToStep3.disabled = true;
+        btnNextToStep3.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Verificando CPF...';
+
+        var lookupResult = await lookupCpfStatus();
+        
+        if (!lookupResult || lookupResult.status === 'ERROR' || lookupResult.status === 'INVALID') {
+            alert('Não foi possível validar o CPF agora. Tente novamente em instantes.');
+            return;
+        }
+
+        var planName = selected.getAttribute('data-name') || '';
+        var priceText = selected.getAttribute('data-price') || '0';
+        var planId = selected.value || '';
+        var discountPercent = appliedCoupon && Number(appliedCoupon.discount_percent) > 0 ? Number(appliedCoupon.discount_percent) : 0;
+        var basePrice = parseFloat(priceText.replace(',', '.'));
+        var finalPrice = discountPercent > 0 ? basePrice * (1 - discountPercent / 100) : basePrice;
+        var dependentsCount = collectDependents().length;
+        var quantity = 1 + dependentsCount;
+
+        const payload = {
+            event: 'dados',
+            transactionId: 'dados_' + Date.now() + Math.random(0,1000), // ID único para esta tentativa de envio de dados
+            ecommerce: {
+                currency: 'BRL',
+                value: finalPrice,
+                items: [{
+                    item_id: planId,
+                    item_name: planName,
+                    price: finalPrice,
+                    quantity: quantity,
+                }]
+            },
+            user_data: {
+                em: getInputValue('clientEmail'),
+                ph: '55' + onlyDigits(getInputValue('clientPhone')),
+                fn: normalizarTexto((getInputValue('clientName') || '').trim().split(/\s+/)[0]),
+                ln: normalizarTexto((getInputValue('clientName') || '').trim().split(/\s+/).pop()),
+                db: getInputValue('clientBirth').replace(/\D/g, ''),
+                ct: normalizarTexto(getInputValue('clientCity')),
+                st: normalizarTexto(getInputValue('clientState')),
+                country: 'br',
+                zp: onlyDigits(getInputValue('clientZip')),
+            }       
+        };
+
+        window.parent.postMessage(payload, "*");
+        goToStep(3);
+    } catch (e) {
+        console.error('Erro no clique:', e);
+    } finally {
+        btnNextToStep3.innerText = 'Ir para Pagamento';
+        validateStep2();
+    }
+};
+        window.handlePurchaseEvent = function (subscriptionId, paymentMethod) {
+            try {
+                var selected = getSelectedPlan();
+                if (!selected) return;
+
+                var planName = selected.getAttribute('data-name') || '';
+                var priceText = selected.getAttribute('data-price') || '0';
+                var planId = selected.value || '';
+                var discountPercent = appliedCoupon && Number(appliedCoupon.discount_percent) > 0 ? Number(appliedCoupon.discount_percent) : 0;
+                var basePrice = parseFloat(priceText.replace(',', '.'));
+                var finalPrice = discountPercent > 0 ? basePrice * (1 - discountPercent / 100) : basePrice;
+
+                // Payload com dados reais da compra realizada
+                const payload = {
+                    event: 'purchase',
+                    ecommerce: {
+                        transaction_id: subscriptionId,
+                        value: finalPrice,
+                        currency: 'BRL',
+                        items: [{
+                            item_id: planId,
+                            item_name: planName,
+                            price: finalPrice,
+                            quantity: 1,
+                        }]
+                    },
+                    user_data: {
+                        em: getInputValue('clientEmail'),
+                        ph: '+55' + onlyDigits(getInputValue('clientPhone')),
+                        fn: normalizarTexto((getInputValue('clientName') || '').trim().split(/\s+/)[0]),
+                        ln: normalizarTexto((getInputValue('clientName') || '').trim().split(/\s+/).pop()),
+                        ct: normalizarTexto(getInputValue('clientCity')),
+                        st: normalizarTexto(getInputValue('clientState')),
+                        country: 'br',
+                        zp: onlyDigits(getInputValue('clientZip'))
+                    },
+                    payment_method: paymentMethod,
+                    discount_percent: discountPercent,
+                    coupon_code: appliedCoupon ? appliedCoupon.code : null,
+                    checkout_status: 'confirmed'
+                };
+
+                // Envia a mensagem para o Wix (Página Pai)
+                window.parent.postMessage(payload, "*");
+            } catch (e) {
+                console.error('Erro ao enviar evento de purchase:', e);
+            }
+        };
+
+        function updateStep3Layout() {
+            if (finalSubmitBtn) {
+                var isPix = paymentMethodInput && paymentMethodInput.value === 'PIX';
+                finalSubmitBtn.textContent = 'Finalizar Pedido';
+                finalSubmitBtn.classList.toggle('d-none', isPix);
+            }
+            validateStep3();
+        }
+
+        function showActiveCpfModal() {
+            var msg = 'Você por aqui? Que presente! 💚 Vimos que você já é de casa e seu cadastro está prontinho, por isso o pagamento não é necessário agora. Corre lá no seu e-mail para ver as informações que preparamos! Se não achar, o Spam pode estar guardando elas para você. ✨';
+            if (activeCpfModalMessage) {
+                activeCpfModalMessage.textContent = msg;
+            }
+            if (activeCpfModal) {
+                activeCpfModal.show();
+            } else {
+                alert(msg);
+            }
+        }
+
+        function resetCpfLookupState() {
+            cpfLookupState = { exists: false, status: 'NOT_FOUND', customerId: '', gatewayId: '', message: '' };
+            if (cpfLookupBanner) cpfLookupBanner.classList.add('d-none');
+            if (paymentMethodInput && paymentMethodInput.value !== 'CREDIT_CARD') {
+                selectPaymentMethod('CREDIT_CARD', true);
+            }
+        }
+
+        function updateCpfLookupBanner(text) {
+            if (!cpfLookupBanner || !cpfLookupBannerText) return;
+            cpfLookupBannerText.textContent = text;
+            cpfLookupBanner.classList.remove('d-none');
+        }
+
+        function selectPaymentMethod(method, force) {
+            var targetMethod = method || 'CREDIT_CARD';
+            paymentTabs.forEach(function (tab) {
+                var tabMethod = tab.getAttribute('data-method');
+                tab.classList.toggle('active', tabMethod === targetMethod);
+            });
+
+            paymentMethodInput.value = targetMethod;
+            if (targetMethod === 'CREDIT_CARD') {
+                document.getElementById('creditCardSection').classList.add('active');
+                document.getElementById('pixSection').classList.remove('active');
+                clearInterval(pixStatusInterval);
+            } else {
+                document.getElementById('pixSection').classList.add('active');
+                document.getElementById('creditCardSection').classList.remove('active');
+                if (force !== true) processCheckout();
+            }
+            updateStep3Layout();
+            validateStep3();
+        }
+
+        function lookupCpfStatus() {
+            var cpf = onlyDigits(getInputValue('clientCpf'));
+            var email = getInputValue('clientEmail');
+            var selected = getSelectedPlan();
+            var productId = selected ? (selected.getAttribute('data-product-id') || '') : '';
+            if (!cpf) {
+                updateCpfLookupBanner('Informe o CPF para continuar.');
+                return Promise.resolve({ status: 'INVALID' });
+            }
+
+            updateCpfLookupBanner('Estamos verificando se já existe cadastro para este CPF.');
+
+            return fetch(API_ORIGIN + '/customers/lookup-cpf', {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ cpf: cpf, email: email, product_id: productId })
+            })
+            .then(function (res) {
+                return res.json().then(function (data) {
+                    return { ok: res.ok, data: data || {} };
+                });
+            })
+            .then(function (result) {
+                var data = result.data || {};
+                if (!result.ok) {
+                    updateCpfLookupBanner(data.message || 'Não foi possível validar o CPF agora.');
+                    return { status: 'ERROR' };
+                }
+
+                cpfLookupState.exists = !!data.exists;
+                cpfLookupState.status = (data.status || 'NOT_FOUND').toUpperCase();
+                cpfLookupState.customerId = data.customer_id || '';
+                cpfLookupState.gatewayId = data.gateway_id || '';
+                cpfLookupState.message = data.message || '';
+
+                if (cpfLookupState.status === 'ACTIVE') {
+                    return cpfLookupState;
+                }
+
+                updateCpfLookupBanner('Nenhum cadastro ativo encontrado. Você pode seguir com o pagamento normalmente.');
+                return cpfLookupState;
+            })
+            .catch(function () {
+                updateCpfLookupBanner('Não foi possível validar o CPF agora. Tente novamente em instantes.');
+                return { status: 'ERROR' };
+            });
+        }
+
+        // ALTERNÂNCIA INDIVIDUAL / FAMILIAR
+        window.togglePlanType = function(type, clickedBtn) {
+            var btns = document.querySelectorAll('.plan-toggle-btn');
+            var individualGrid = document.querySelector('.individual-plans');
+            var familiarGrid = document.querySelector('.familiar-plans');
+            var activeBtn = clickedBtn || document.querySelector('.plan-toggle-btn[data-plan-type="' + type + '"]');
+
+            btns.forEach(function(b) { b.classList.remove('active'); });
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+
+            if (type === 'individual') {
+                if (individualGrid) individualGrid.classList.add('active-plan-group');
+                if (familiarGrid) familiarGrid.classList.remove('active-plan-group');
+
+                if (individualGrid) individualGrid.style.setProperty('display', 'flex', 'important');
+                if (familiarGrid) familiarGrid.style.setProperty('display', 'none', 'important');
+            } else {
+                if (individualGrid) individualGrid.classList.remove('active-plan-group');
+                if (familiarGrid) familiarGrid.classList.add('active-plan-group');
+
+                if (individualGrid) individualGrid.style.setProperty('display', 'none', 'important');
+                if (familiarGrid) familiarGrid.style.setProperty('display', 'flex', 'important');
+            }
+
+            // Desmarca o plano ao trocar de aba e trava o botão
+            planInputs.forEach(function(i) { i.checked = false; });
+            btnNextToStep2.disabled = true;
+            appliedCoupon = null;
+            if (couponCodeInput) couponCodeInput.value = '';
+            renderCouponFeedback('Se tiver cupom, valide antes de ir para o pagamento.', 'neutral');
+            resetDependents();
+            resetCpfLookupState();
+            updatePlanLabels();
+        };
+
+        function parsePriceToCents(priceText) {
+            var normalized = (priceText || '0').replace(/\./g, '').replace(',', '.').replace(/[^0-9.]/g, '');
+            var value = Number(normalized || '0');
+            if (!isFinite(value)) return 0;
+            return Math.round(value * 100);
+        }
+
+        function formatCentsToBRL(cents) {
+            return 'R$ ' + ((cents || 0) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function getSelectedPlan() {
+            return document.querySelector('.plan-input:checked');
+        }
+
+        function getSelectedPlanLimit() {
+            var selected = getSelectedPlan();
+            if (!selected) return 0;
+            return Number(selected.getAttribute('data-max-dependents') || '0');
+        }
+
+        function isFamilyPlanSelected() {
+            var selected = getSelectedPlan();
+            return !!selected && selected.getAttribute('data-family') === 'true';
+        }
+
+        function renderCouponFeedback(message, type) {
+            couponFeedback.classList.remove('coupon-ok', 'coupon-error');
+            if (type === 'ok') couponFeedback.classList.add('coupon-ok');
+            if (type === 'error') couponFeedback.classList.add('coupon-error');
+            couponFeedback.textContent = message;
+        }
+
+        function normalizeCouponCode(value) {
+            return (value || '').trim().toUpperCase();
+        }
+
+        function updateIndicators(step) {
+            document.querySelectorAll('.step-indicator').forEach(function(el) { el.classList.remove('active'); });
+            var activeInd = document.getElementById('indStep' + step);
+            if (activeInd) activeInd.classList.add('active');
+            
+            // Esconde os indicadores se for a tela de sucesso
+            if (step === 4) {
+                indContainer.style.display = 'none';
+            } else {
+                indContainer.style.display = 'block';
+            }
+        }
+
+        function updatePlanLabels() {
+            var planSelected = getSelectedPlan();
+            if (!planSelected) return;
+            var name = planSelected.getAttribute('data-name');
+            var baseCents = parsePriceToCents(planSelected.getAttribute('data-price'));
+            var discountPercent = appliedCoupon && Number(appliedCoupon.discount_percent) > 0 ? Number(appliedCoupon.discount_percent) : 0;
+            var finalCents = baseCents;
+            if (discountPercent > 0) {
+                var discountCents = Math.floor((baseCents * discountPercent) / 100);
+                finalCents = Math.max(0, baseCents - discountCents);
+            }
+
+            document.getElementById('lblPlanNameStep2').innerText = name;
+            document.getElementById('lblPlanPriceStep2').innerText = formatCentsToBRL(finalCents);
+            document.getElementById('lblPlanNameStep3').innerText = name;
+            document.getElementById('lblPlanPriceStep3').innerText = formatCentsToBRL(finalCents);
+
+            if (discountPercent > 0) {
+                discountSummaryStep3.style.display = 'block';
+                discountSummaryStep3.textContent = 'Cupom aplicado (' + discountPercent + '%): de ' + formatCentsToBRL(baseCents) + ' por ' + formatCentsToBRL(finalCents) + '.';
+            } else {
+                discountSummaryStep3.style.display = 'none';
+                discountSummaryStep3.textContent = '';
+            }
+
+            updateDependentsSection();
+        }
+
+        function resetDependents() {
+            dependentsContainer.innerHTML = '';
+            updateDependentsSection();
+        }
+
+        function addDependentCard() {
+            var limit = getSelectedPlanLimit();
+            var current = dependentsContainer.querySelectorAll('.dependent-card').length;
+            if (!isFamilyPlanSelected()) {
+                alert('Dependentes só podem ser adicionados em planos familiares.');
+                return;
+            }
+            if (current >= limit) {
+                alert('Limite de dependentes atingido para este plano.');
+                return;
+            }
+
+            var idx = Date.now();
+            var html = '' +
+                '<div class="dependent-card" data-dependent="' + idx + '">' +
+                    '<div class="d-flex justify-content-between align-items-center mb-2">' +
+                        '<strong class="small text-primary">Dependente ' + (current + 1) + '</strong>' +
+                        '<button type="button" class="btn btn-sm btn-outline-danger" data-remove-dependent="' + idx + '">Remover</button>' +
+                    '</div>' +
+                    '<div class="row g-2">' +
+                        '<div class="col-md-6"><input type="text" class="form-control form-control-sm dep-name" placeholder="Nome completo"></div>' +
+                        '<div class="col-md-3"><input type="text" class="form-control form-control-sm dep-cpf" placeholder="CPF" maxlength="11"></div>' +
+                        '<div class="col-md-3"><input type="date" class="form-control form-control-sm dep-birth"></div>' +
+                        '<div class="col-md-3">' +
+                            '<select class="form-select form-select-sm dep-gender">' +
+                                '<option value="">Sexo</option>' +
+                                '<option value="1">Masculino</option>' +
+                                '<option value="2">Feminino</option>' +
+                                '<option value="3">Outro</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div class="col-md-5">' +
+                            '<select class="form-select form-select-sm dep-kinship">' +
+                                '<option value="">Parentesco</option>' +
+                                '<option value="FILHO">Filho(a)</option>' +
+                                '<option value="CONJUGE">Cônjuge</option>' +
+                                '<option value="PAI">Pai</option>' +
+                                '<option value="MAE">Mãe</option>' +
+                                '<option value="IRMAO">Irmão(ã)</option>' +
+                                '<option value="OUTRO">Outro</option>' +
+                            '</select>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>';
+
+            dependentsContainer.insertAdjacentHTML('beforeend', html);
+            updateDependentsSection();
+            validateStep2();
+        }
+
+        function updateDependentsSection() {
+            var limit = getSelectedPlanLimit();
+            var current = dependentsContainer.querySelectorAll('.dependent-card').length;
+            var isFamily = isFamilyPlanSelected();
+
+            if (!isFamily) {
+                dependentsSection.style.display = 'none';
+                dependentsHint.textContent = '';
+                btnAddDependent.disabled = true;
+                return;
+            }
+
+            dependentsSection.style.display = 'block';
+            dependentsHint.textContent = 'Você pode incluir até ' + limit + ' dependentes neste plano. (' + current + '/' + limit + ')';
+            btnAddDependent.disabled = current >= limit;
+        }
+
+        function collectDependents() {
+            var cards = dependentsContainer.querySelectorAll('.dependent-card');
+            var output = [];
+            cards.forEach(function (card) {
+                var dep = {
+                    name: (card.querySelector('.dep-name').value || '').trim(),
+                    cpf: formatCPF(card.querySelector('.dep-cpf').value || ''),
+                    birth_date: (card.querySelector('.dep-birth').value || '').trim(),
+                    gender: (card.querySelector('.dep-gender').value || '').trim(),
+                    kinship: (card.querySelector('.dep-kinship').value || '').trim()
+                };
+                output.push(dep);
+            });
+            return output;
+        }
+
+        function validateDependents() {
+            if (!isFamilyPlanSelected()) return true;
+
+            var limit = getSelectedPlanLimit();
+            var deps = collectDependents();
+            if (deps.length > limit) return false;
+
+            for (var i = 0; i < deps.length; i++) {
+                var dep = deps[i];
+                if (!dep.name || dep.name.length < 3) return false;
+                if (!isValidCPF(dep.cpf)) return false;
+                if (!dep.birth_date) return false;
+                if (!dep.gender) return false;
+                if (!dep.kinship) return false;
+            }
+
+            return true;
+        }
+
+        function validateCoupon() {
+            var code = normalizeCouponCode(couponCodeInput.value);
+            if (!code) {
+                appliedCoupon = null;
+                renderCouponFeedback('Informe um cupom para validar.', 'error');
+                updatePlanLabels();
+                return;
+            }
+
+            btnValidateCoupon.disabled = true;
+            btnValidateCoupon.innerText = 'Validando...';
+
+            fetch(COUPON_VALIDATE_URL, {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({ coupon_code: code })
+            })
+            .then(function (res) {
+                return res.json().then(function (data) {
+                    return { ok: res.ok, data: data || {} };
+                });
+            })
+            .then(function (result) {
+                if (!result.ok || !result.data.valid) {
+                    appliedCoupon = null;
+                    renderCouponFeedback('Cupom inválido ou inativo.', 'error');
+                    updatePlanLabels();
+                    return;
+                }
+
+                appliedCoupon = {
+                    code: normalizeCouponCode(result.data.coupon_code || code),
+                    discount_percent: Number(result.data.discount_percent || 10),
+                    seller_name: result.data.seller_name || ''
+                };
+
+                couponCodeInput.value = appliedCoupon.code;
+                renderCouponFeedback('Cupom válido! Desconto de ' + appliedCoupon.discount_percent + '% aplicado.', 'ok');
+                updatePlanLabels();
+            })
+            .catch(function () {
+                appliedCoupon = null;
+                renderCouponFeedback('Não foi possível validar o cupom agora.', 'error');
+                updatePlanLabels();
+            })
+            .finally(function () {
+                btnValidateCoupon.disabled = false;
+                btnValidateCoupon.innerText = 'Validar cupom';
+                validateStep2();
+            });
+        }
+
+        window.goToStep = function (targetStep) {
+            var hasPlan = document.querySelector('.plan-input:checked') !== null;
+            var step2Validation = null;
+            var isStep2Valid = true;
+            if (targetStep === 3) {
+                showStep2InlineErrors = true;
+                step2Validation = validateStep2();
+                isStep2Valid = !!(step2Validation && step2Validation.isValid);
+            }
+            var currentStep = step1.style.display !== 'none' ? 1 : (step2.style.display !== 'none' ? 2 : (step3.style.display !== 'none' ? 3 : 4));
+
+            if (targetStep === 2 && !hasPlan) { alert('Selecione um plano.'); return; }
+            if (targetStep === 3 && (!hasPlan || !isStep2Valid)) {
+                if (step2Validation && step2Validation.fieldErrors) {
+                    focusFirstInvalidStep2Field(step2Validation.fieldErrors);
+                }
+                alert('Preencha os dados.');
+                return;
+            }
+
+            // Eventos de funil: dispara no momento real da navegação de etapa
+            if (targetStep === 2 && currentStep === 1 && !beginCheckoutPushed) {
+                pushDataLayerEvent('begin_checkout', { checkout_step: 'continuar' });
+                beginCheckoutPushed = true;
+            }
+            if (targetStep === 3 && currentStep === 2 && !dadosPushed) {
+                pushDataLayerEvent('dados', { checkout_step: 'dados' });
+                dadosPushed = true;
+            }
+
+            step1.style.display = targetStep === 1 ? 'block' : 'none';
+            step2.style.display = targetStep === 2 ? 'block' : 'none';
+            step3.style.display = targetStep === 3 ? 'block' : 'none';
+            step4.style.display = targetStep === 4 ? 'block' : 'none';
+
+            updateIndicators(targetStep);
+            if (targetStep === 2 || targetStep === 3) updatePlanLabels();
+            if (targetStep === 3) updateStep3Layout();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        planInputs.forEach(function(input) {
+            input.addEventListener('change', function () {
+                btnNextToStep2.disabled = false;
+                updatePlanLabels();
+                validateStep2();
+            });
+        });
+
+        function getInputValue(id) { return (document.getElementById(id).value || '').trim(); }
+
+        function getAuthHeaders() {
+            var headers = { 'Content-Type': 'application/json' };
+            try {
+                var token = window.AUTH_TOKEN || localStorage.getItem('authToken') || window.__LIGUE_AUTH_TOKEN__;
+                if (token) headers['Authorization'] = 'Bearer ' + token;
+            } catch (e) {}
+            return headers;
+        }
+
+        function onlyDigits(value) { return (value || '').replace(/\D/g, ''); }
+
+        function normalizarTexto(texto) {
+            if (!texto) return '';
+            // Remove acentos e cedilhas
+            var normalizado = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            // Converte para lowercase, remove espaços e trim
+            return normalizado.toLowerCase().replace(/\s+/g, '').trim();
+        }
+
+        function formatCPF(cpf) {
+            var clean = onlyDigits(cpf);
+            if (clean.length !== 11) return clean;
+            return clean.slice(0, 3) + '.' + clean.slice(3, 6) + '.' + clean.slice(6, 9) + '-' + clean.slice(9, 11);
+        }
+
+        function isValidEmail(email) {
+            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+        }
+
+        function isValidCPF(cpf) {
+            cpf = onlyDigits(cpf);
+            if (cpf.length !== 11) return false;
+            if (/^(\d)\1{10}$/.test(cpf)) return false;
+
+            var sum = 0;
+            var remainder;
+
+            for (var i = 1; i <= 9; i++) {
+                sum += parseInt(cpf.substring(i - 1, i), 10) * (11 - i);
+            }
+            remainder = (sum * 10) % 11;
+            if (remainder === 10 || remainder === 11) remainder = 0;
+            if (remainder !== parseInt(cpf.substring(9, 10), 10)) return false;
+
+            sum = 0;
+            for (var j = 1; j <= 10; j++) {
+                sum += parseInt(cpf.substring(j - 1, j), 10) * (12 - j);
+            }
+            remainder = (sum * 10) % 11;
+            if (remainder === 10 || remainder === 11) remainder = 0;
+            return remainder === parseInt(cpf.substring(10, 11), 10);
+        }
+
+        function isValidPhone(phone) {
+            phone = onlyDigits(phone);
+            if (!phone) return false;
+
+            // Regra principal (Asaas-friendly): celular BR com DDD + 9 dígitos
+            // Ex.: 61999998888
+            var mobilePattern = /^[1-9]{2}9\d{8}$/;
+            if (!mobilePattern.test(phone)) return false;
+
+            // Bloqueia sequências artificiais no número local (ex.: 11999999999)
+            var localNumber = phone.substring(2); // 9 dígitos
+            if (/^(\d)\1{8}$/.test(localNumber)) return false;
+            if (localNumber === '123456789' || localNumber === '987654321' || localNumber === '000000000') return false;
+
+            // Se passou em todas as validações, é válido
+            return true;
+        }
+
+        function isValidZip(zip) {
+            return onlyDigits(zip).length === 8;
+        }
+
+        function isValidUF(state) {
+            return /^[A-Z]{2}$/.test((state || '').toUpperCase());
+        }
+
+        function isAdult(birthDate) {
+            if (!birthDate) return false;
+            var birth = new Date(birthDate + 'T00:00:00');
+            if (isNaN(birth.getTime())) return false;
+            var today = new Date();
+            var age = today.getFullYear() - birth.getFullYear();
+            var m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            return age >= 18;
+        }
+
+        function luhnCheck(cardNumber) {
+            var sum = 0;
+            var shouldDouble = false;
+            for (var i = cardNumber.length - 1; i >= 0; i--) {
+                var digit = parseInt(cardNumber.charAt(i), 10);
+                if (shouldDouble) {
+                    digit *= 2;
+                    if (digit > 9) digit -= 9;
+                }
+                sum += digit;
+                shouldDouble = !shouldDouble;
+            }
+            return sum % 10 === 0;
+        }
+
+        function isValidCardNumber(cardNumber) {
+            cardNumber = onlyDigits(cardNumber);
+            if (cardNumber.length < 13 || cardNumber.length > 19) return false;
+            return luhnCheck(cardNumber);
+        }
+
+        function isValidCardExpiry(expiry) {
+            if (!/^(0[1-9]|1[0-2])\/\d{2}$/.test(expiry)) return false;
+            var parts = expiry.split('/');
+            var mm = parseInt(parts[0], 10);
+            var yy = parseInt(parts[1], 10) + 2000;
+            var now = new Date();
+            var currentYear = now.getFullYear();
+            var currentMonth = now.getMonth() + 1;
+            return yy > currentYear || (yy === currentYear && mm >= currentMonth);
+        }
+
+        function isValidCVV(cvv) {
+            return /^\d{3,4}$/.test(onlyDigits(cvv));
+        }
+
+        function setBirthDateMaxTo18YearsOld() {
+            var birthInput = document.getElementById('clientBirth');
+            if (!birthInput) return;
+            var now = new Date();
+            var max = new Date(now.getFullYear() - 18, now.getMonth(), now.getDate());
+            birthInput.max = max.toISOString().split('T')[0];
+        }
+
+        function renderStep2ValidationFeedback(issues) {
+            if (!step2ValidationFeedback) return;
+
+            if (!issues || issues.length === 0) {
+                step2ValidationFeedback.classList.add('d-none');
+                step2ValidationFeedback.innerHTML = '';
+                return;
+            }
+
+            var html = '<strong>Revise os dados antes de continuar:</strong><ul class="mb-0 mt-2">';
+            for (var i = 0; i < issues.length; i++) {
+                html += '<li>' + issues[i] + '</li>';
+            }
+            html += '</ul>';
+
+            step2ValidationFeedback.innerHTML = html;
+            step2ValidationFeedback.classList.remove('d-none');
+        }
+
+        function ensureInlineErrorNode(inputId) {
+            var input = document.getElementById(inputId);
+            if (!input) return null;
+
+            var nodeId = inputId + 'InlineError';
+            var node = document.getElementById(nodeId);
+            if (node) return node;
+
+            node = document.createElement('small');
+            node.id = nodeId;
+            node.className = 'field-error-inline d-none';
+
+            if (inputId === 'termsCheck') {
+                var formCheck = input.closest('.form-check');
+                if (formCheck) {
+                    formCheck.appendChild(node);
+                }
+            } else {
+                input.insertAdjacentElement('afterend', node);
+            }
+
+            return node;
+        }
+
+        function setInlineFieldError(inputId, message) {
+            var input = document.getElementById(inputId);
+            if (!input) return;
+
+            var node = ensureInlineErrorNode(inputId);
+            if (!node) return;
+
+            input.classList.add('is-invalid');
+            node.textContent = message || '';
+            node.classList.remove('d-none');
+        }
+
+        function clearInlineFieldError(inputId) {
+            var input = document.getElementById(inputId);
+            if (input) input.classList.remove('is-invalid');
+
+            var node = document.getElementById(inputId + 'InlineError');
+            if (node) {
+                node.textContent = '';
+                node.classList.add('d-none');
+            }
+        }
+
+        function applyStep2FieldErrors(fieldErrors) {
+            var step2Fields = [
+                'clientName', 'clientEmail', 'clientCpf', 'clientPhone', 'clientBirth',
+                'clientZip', 'clientStreet', 'clientNumber', 'clientDistrict', 'clientCity',
+                'clientState', 'termsCheck', 'couponCode'
+            ];
+
+            step2Fields.forEach(function (fieldId) {
+                if (fieldErrors[fieldId]) {
+                    setInlineFieldError(fieldId, fieldErrors[fieldId]);
+                } else {
+                    clearInlineFieldError(fieldId);
+                }
+            });
+        }
+
+        function clearAllStep2InlineErrors() {
+            applyStep2FieldErrors({});
+        }
+
+        function focusFirstInvalidStep2Field(fieldErrors) {
+            var order = [
+                'clientName', 'clientEmail', 'clientCpf', 'clientPhone', 'clientBirth',
+                'clientZip', 'clientStreet', 'clientNumber', 'clientDistrict', 'clientCity',
+                'clientState', 'termsCheck', 'couponCode'
+            ];
+
+            for (var i = 0; i < order.length; i++) {
+                var key = order[i];
+                if (!fieldErrors[key]) continue;
+
+                var el = document.getElementById(key);
+                if (!el) continue;
+
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                try { el.focus(); } catch (e) {}
+                return;
+            }
+        }
+
+        function getDependentsValidationIssues() {
+            var issues = [];
+            if (!isFamilyPlanSelected()) return issues;
+
+            var limit = getSelectedPlanLimit();
+            var deps = collectDependents();
+
+            if (deps.length > limit) {
+                issues.push('Quantidade de dependentes acima do limite do plano.');
+                return issues;
+            }
+
+            for (var i = 0; i < deps.length; i++) {
+                var idx = i + 1;
+                var dep = deps[i];
+                if (!dep.name || dep.name.length < 3) issues.push('Dependente ' + idx + ': informe nome completo válido.');
+                if (!isValidCPF(dep.cpf)) issues.push('Dependente ' + idx + ': CPF inválido.');
+                if (!dep.birth_date) issues.push('Dependente ' + idx + ': data de nascimento obrigatória.');
+                if (!dep.gender) issues.push('Dependente ' + idx + ': selecione o sexo.');
+                if (!dep.kinship) issues.push('Dependente ' + idx + ': selecione o parentesco.');
+            }
+
+            return issues;
+        }
+
+        function validateStep2() {
+            var name = getInputValue('clientName');
+            var email = getInputValue('clientEmail');
+            var cpf = getInputValue('clientCpf');
+            var phone = getInputValue('clientPhone');
+            var birth = getInputValue('clientBirth');
+            var zip = getInputValue('clientZip');
+            var street = getInputValue('clientStreet');
+            var num = getInputValue('clientNumber');
+            var district = getInputValue('clientDistrict');
+            var city = getInputValue('clientCity');
+            var state = getInputValue('clientState').toUpperCase();
+            var typedCoupon = normalizeCouponCode(couponCodeInput.value);
+
+            var issues = [];
+            var fieldErrors = {};
+
+            if (!name) {
+                fieldErrors.clientName = 'Nome completo é obrigatório.';
+            } else if (name.length < 3 || name.length > 200) {
+                fieldErrors.clientName = 'Nome completo deve ter entre 3 e 200 caracteres.';
+            }
+
+            if (!email) {
+                fieldErrors.clientEmail = 'E-mail é obrigatório.';
+            } else if (!isValidEmail(email)) {
+                fieldErrors.clientEmail = 'E-mail inválido.';
+            }
+
+            if (!cpf) {
+                fieldErrors.clientCpf = 'CPF é obrigatório.';
+            } else if (!isValidCPF(cpf)) {
+                fieldErrors.clientCpf = 'CPF inválido.';
+            }
+
+            if (!phone) {
+                fieldErrors.clientPhone = 'Telefone é obrigatório.';
+            } else if (!isValidPhone(phone)) {
+                fieldErrors.clientPhone = 'Telefone inválido. Use celular real com DDD.';
+            }
+
+            if (!birth) {
+                fieldErrors.clientBirth = 'Data de nascimento é obrigatória.';
+            } else if (!isAdult(birth)) {
+                fieldErrors.clientBirth = 'É necessário ter 18 anos ou mais para contratar.';
+            }
+
+            if (!zip) {
+                fieldErrors.clientZip = 'CEP é obrigatório.';
+            } else if (!isValidZip(zip)) {
+                fieldErrors.clientZip = 'CEP inválido (use 8 dígitos).';
+            }
+
+            if (!street) fieldErrors.clientStreet = 'Rua/Logradouro é obrigatório.';
+            if (!num) fieldErrors.clientNumber = 'Número do endereço é obrigatório.';
+            if (!district) fieldErrors.clientDistrict = 'Bairro é obrigatório.';
+            if (!city) fieldErrors.clientCity = 'Cidade é obrigatória.';
+
+            if (!state) {
+                fieldErrors.clientState = 'UF é obrigatória.';
+            } else if (!isValidUF(state)) {
+                fieldErrors.clientState = 'UF inválida (use 2 letras).';
+            }
+
+            if (!termsCheck.checked) {
+                fieldErrors.termsCheck = 'Você precisa aceitar os Termos de Serviço.';
+            }
+
+            if (typedCoupon && (!appliedCoupon || appliedCoupon.code !== typedCoupon)) {
+                fieldErrors.couponCode = 'Valide o cupom digitado antes de continuar.';
+            }
+
+            var depIssues = getDependentsValidationIssues();
+            issues = Object.keys(fieldErrors).map(function (k) { return fieldErrors[k]; });
+            if (depIssues.length) issues = issues.concat(depIssues);
+
+            var isValid = issues.length === 0;
+            btnNextToStep3.disabled = !isValid;
+
+            if (showStep2InlineErrors) {
+                applyStep2FieldErrors(fieldErrors);
+                renderStep2ValidationFeedback(depIssues);
+            } else {
+                clearAllStep2InlineErrors();
+                renderStep2ValidationFeedback([]);
+            }
+
+            return {
+                isValid: isValid,
+                issues: issues,
+                fieldErrors: fieldErrors
+            };
+        }
+
+        document.getElementById('clientName').addEventListener('input', function () { this.value = this.value.replace(/[0-9]/g, ''); validateStep2(); });
+        document.getElementById('clientBirth').addEventListener('change', validateStep2);
+        document.getElementById('clientCpf').addEventListener('input', function () { this.value = this.value.replace(/\D/g, ''); resetCpfLookupState(); validateStep2(); });
+        document.getElementById('clientPhone').addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '');
+            showStep2InlineErrors = true;
+            validateStep2();
+        });
+        document.getElementById('clientEmail').addEventListener('input', validateStep2);
+        document.getElementById('clientStreet').addEventListener('input', validateStep2);
+        document.getElementById('clientNumber').addEventListener('input', validateStep2);
+        document.getElementById('clientDistrict').addEventListener('input', validateStep2);
+        document.getElementById('clientCity').addEventListener('input', validateStep2);
+        document.getElementById('clientState').addEventListener('input', function () {
+            this.value = this.value.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
+            validateStep2();
+        });
+        termsCheck.addEventListener('change', validateStep2);
+        if (couponCodeInput) {
+            couponCodeInput.addEventListener('input', function () {
+                this.value = this.value.toUpperCase().replace(/\s+/g, '');
+                var typed = normalizeCouponCode(this.value);
+                if (!typed) {
+                    appliedCoupon = null;
+                    renderCouponFeedback('Se tiver cupom, valide antes de ir para o pagamento.', 'neutral');
+                    updatePlanLabels();
+                    validateStep2();
+                    return;
+                }
+                if (!appliedCoupon || appliedCoupon.code !== typed) {
+                    renderCouponFeedback('Cupom digitado. Clique em "Validar cupom".', 'neutral');
+                }
+                validateStep2();
+            });
+        }
+        if (btnValidateCoupon) btnValidateCoupon.addEventListener('click', validateCoupon);
+
+        if (btnAddDependent) {
+            btnAddDependent.addEventListener('click', addDependentCard);
+        }
+
+        dependentsContainer.addEventListener('click', function (e) {
+            var btn = e.target.closest('[data-remove-dependent]');
+            if (!btn) return;
+            var depId = btn.getAttribute('data-remove-dependent');
+            var card = dependentsContainer.querySelector('[data-dependent="' + depId + '"]');
+            if (card) card.remove();
+            updateDependentsSection();
+            validateStep2();
+        });
+
+        dependentsContainer.addEventListener('input', function (e) {
+            var target = e.target;
+            if (target.classList.contains('dep-cpf')) {
+                target.value = target.value.replace(/\D/g, '');
+            }
+            validateStep2();
+        });
+
+        document.getElementById('clientZip').addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '');
+            if (this.value.length === 8) {
+                document.getElementById('cepLoading').classList.remove('d-none');
+                fetch('https://viacep.com.br/ws/' + this.value + '/json/')
+                    .then(res => res.json())
+                    .then(data => {
+                        if(!data.erro) {
+                            document.getElementById('clientStreet').value = data.logradouro || '';
+                            document.getElementById('clientDistrict').value = data.bairro || '';
+                            document.getElementById('clientCity').value = data.localidade || '';
+                            document.getElementById('clientState').value = data.uf || '';
+                        }
+                        document.getElementById('cepLoading').classList.add('d-none');
+                        validateStep2();
+                    });
+            }
+        });
+
+        function validateStep3() {
+            if (paymentMethodInput.value === 'PIX') { finalSubmitBtn.disabled = false; return; }
+            var ccNum = getInputValue('cardNumber');
+            var ccName = getInputValue('cardName');
+            var ccExp = getInputValue('cardExpiry');
+            var ccCvv = getInputValue('cardCvv');
+            finalSubmitBtn.disabled = (!isValidCardNumber(ccNum) || ccName.length < 3 || !isValidCardExpiry(ccExp) || !isValidCVV(ccCvv));
+        }
+
+        document.getElementById('cardNumber').addEventListener('input', function () {
+            this.value = this.value.replace(/\D/g, '').slice(0, 19);
+            validateStep3();
+        });
+        document.getElementById('cardName').addEventListener('input', function () { this.value = this.value.toUpperCase(); validateStep3(); });
+        document.getElementById('cardCvv').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0,4); validateStep3(); });
+        document.getElementById('cardExpiry').addEventListener('input', function () {
+            var v = this.value.replace(/\D/g, '');
+            if (v.length >= 2) v = v.substring(0, 2) + '/' + v.substring(2, 4);
+            this.value = v;
+            validateStep3();
+        });
+
+        paymentTabs.forEach(function (tab) {
+            tab.addEventListener('click', function (e) {
+                selectPaymentMethod(e.target.getAttribute('data-method'));
+            });
+        });
+
+        function processCheckout() {
+            var selectedPlan = getSelectedPlan();
+            if (!selectedPlan) return;
+
+            var typedCoupon = normalizeCouponCode(couponCodeInput.value);
+
+            if (!isAdult(getInputValue('clientBirth'))) {
+                alert('Você deve ter pelo menos 18 anos para contratar este plano.');
+                return;
+            }
+
+            if (!isValidZip(getInputValue('clientZip'))) {
+                alert('Informe um CEP válido com 8 dígitos.');
+                return;
+            }
+
+            if (!isValidPhone(getInputValue('clientPhone'))) {
+                alert('Informe um telefone válido.');
+                return;
+            }
+
+            if (!validateDependents()) {
+                alert('Verifique os dados dos dependentes e o limite do plano familiar.');
+                return;
+            }
+
+            if (typedCoupon && (!appliedCoupon || appliedCoupon.code !== typedCoupon)) {
+                alert('Valide o cupom antes de finalizar.');
+                return;
+            }
+
+            var dependentsPayload = collectDependents();
+            var maxDependents = getSelectedPlanLimit();
+            if (dependentsPayload.length > maxDependents) {
+                alert('Você excedeu o limite de dependentes para este plano.');
+                return;
+            }
+
+            finalSubmitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processando...';
+            finalSubmitBtn.disabled = true;
+
+            var payload = {
+                name: getInputValue('clientName'), email: getInputValue('clientEmail'), cpf: getInputValue('clientCpf'),
+                plan_id: selectedPlan.value,
+                phone: getInputValue('clientPhone'),
+                birth_date: getInputValue('clientBirth'),
+                gender: getInputValue('clientGender'),
+                street: getInputValue('clientStreet'),
+                number: getInputValue('clientNumber'),
+                complement: getInputValue('clientComplement'),
+                district: getInputValue('clientDistrict'),
+                city: getInputValue('clientCity'),
+                state: getInputValue('clientState').toUpperCase(),
+                zip_code: onlyDigits(getInputValue('clientZip')),
+                payment_method: paymentMethodInput.value,
+                terms_accepted: termsCheck.checked,
+                terms_accepted_at: new Date().toISOString(),
+                terms_version: '1.0'
+            };
+
+            if (typedCoupon && appliedCoupon) {
+                payload.coupon_code = appliedCoupon.code;
+            }
+
+            if (isFamilyPlanSelected() && dependentsPayload.length > 0) {
+                payload.dependents = dependentsPayload;
+            }
+
+            if (payload.payment_method === 'CREDIT_CARD') {
+                var parts = getInputValue('cardExpiry').split('/');
+                payload.card_number = getInputValue('cardNumber');
+                payload.card_holder = getInputValue('cardName');
+                payload.card_month = parts[0]; payload.card_year = parts[1].length === 2 ? '20'+parts[1] : parts[1];
+                payload.card_cvv = getInputValue('cardCvv');
+
+                if (!isValidCardNumber(payload.card_number) || !payload.card_holder || payload.card_holder.length < 3 || !isValidCardExpiry(getInputValue('cardExpiry')) || !isValidCVV(payload.card_cvv)) {
+                    alert('Verifique os dados do cartão.');
+                    finalSubmitBtn.innerHTML = 'Finalizar Pedido';
+                    validateStep3();
+                    return;
+                }
+            }
+
+            fetch(CHECKOUT_URL, {
+                method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                var hasSuccessShape = !!(data && (data.id || data.status || data.pix_code || data.pix_qr_code_url || data.pix_url));
+                if (data.error || (data.message && !hasSuccessShape)) { alert('Erro: ' + (data.message || data.error)); return; }
+                
+                if (payload.payment_method === 'PIX') {
+                    showPixQrCode(data);
+                } else {
+                    if (!purchaseAlreadyPushed) {
+                        var transactionId = data.subscription_id || data.id || data.customer_id || ('cc_' + Date.now());
+                        // Dispara evento de compra com dados reais
+                        handlePurchaseEvent(transactionId, payload.payment_method);
+                        purchaseAlreadyPushed = true;
+                    }
+                    window.goToStep(4);
+                }
+            })
+            .catch(err => alert('Erro no servidor.'))
+            .finally(() => {
+                finalSubmitBtn.innerHTML = 'Finalizar Pedido';
+                validateStep3();
+            });
+        }
+
+        finalSubmitBtn.addEventListener('click', processCheckout);
+
+        function showPixQrCode(data) {
+            var qr = data.pix_qr_code_url || data.pix_url || '';
+            var code = data.pix_code || data.payload || '';
+
+            console.log('[PIX] render data', {
+                id: data && data.id ? data.id : '',
+                status: data && data.status ? data.status : '',
+                qrSource: data && data.pix_qr_code_url ? 'pix_qr_code_url' : (data && data.pix_url ? 'pix_url' : ''),
+                codeSource: data && data.pix_code ? 'pix_code' : (data && data.payload ? 'payload' : ''),
+                qrLength: qr ? String(qr).length : 0,
+                codeLength: code ? String(code).length : 0,
+                qrValue: qr,
+                codeValue: code
+            });
+            
+            if (qr && !qr.startsWith('http') && !qr.startsWith('data:')) qr = 'data:image/png;base64,' + qr;
+
+            var html = '<div class="text-center">';
+            if (qr) html += '<img src="'+qr+'" class="img-fluid mb-3" style="max-width: 250px; border: 1px solid #ddd; border-radius: 8px;">';
+            if (code) html += '<div class="mt-3"><textarea class="form-control font-monospace" id="pixCopy" rows="4" readonly style="resize: vertical; word-break: break-all;">'+code+'</textarea><div class="d-grid mt-2"><button class="btn btn-primary" onclick="document.getElementById(\'pixCopy\').select();document.execCommand(\'copy\');alert(\'Copiado!\')">Copiar</button></div></div>';
+            html += '<div id="pixStatus" class="mt-3"><span class="text-warning"><i class="bi bi-hourglass-split"></i> Aguardando pagamento...</span><div class="small text-muted mt-2">Verificando a cada 5 segundos</div></div></div>';
+            
+            document.getElementById('pixInlineContainer').innerHTML = html;
+            
+            var customerId = data.id || data.customer_id || data.subscription_id || '';
+            if (customerId) {
+                currentPixCustomerId = customerId;
+                console.log('[PIX] Starting polling with customer ID:', currentPixCustomerId);
+                if (pixStatusInterval) {
+                    clearInterval(pixStatusInterval);
+                    pixStatusInterval = null;
+                }
+                // start polling and do an immediate check
+                pixStatusInterval = setInterval(checkPixStatusPost, 5000);
+                try { checkPixStatusPost(); } catch (e) { console.warn('[PIX] immediate check failed', e); }
+            } else {
+                console.error('[PIX] No ID found in response:', data);
+                var pixStatusEl = document.getElementById('pixStatus');
+                if (pixStatusEl) pixStatusEl.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Erro: resposta sem ID para polling</span>';
+            }
+        }
+
+        // VERIFICAÇÃO PIX SOMENTE VIA POST (Conforme solicitado)
+        function checkPixStatusPost() {
+            if (!currentPixCustomerId) {
+                console.error('[PIX] No customer ID to check');
+                return;
+            }
+
+            fetch(API_ORIGIN + '/customers/status?t=' + Date.now(), {
+                method: 'POST',
+                headers: getAuthHeaders(),
+                body: JSON.stringify({
+                    customer_id: currentPixCustomerId,
+                    id: currentPixCustomerId
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                console.log('[PIX] status check response', data);
+
+                // If backend returns an error payload (often 200 with error body), handle it
+                if (data && (data.error || data.message)) {
+                    var errMsg = data.error || data.message || '';
+                    if (String(errMsg).toUpperCase().indexOf('MISSING_ID') !== -1 || /Customer ID is required/i.test(errMsg)) {
+                        console.error('[PIX] backend reports missing id:', errMsg);
+                        if (pixStatusInterval) { clearInterval(pixStatusInterval); pixStatusInterval = null; }
+                        var pixStatusElErr = document.getElementById('pixStatus');
+                        if (pixStatusElErr) {
+                            pixStatusElErr.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> Erro: ' + (errMsg) + '</span>' +
+                                '<div class="mt-2"><button class="btn btn-sm btn-outline-primary" id="pixRetryBtn">Tentar novamente</button></div>';
+                            setTimeout(function () {
+                                var retryBtn = document.getElementById('pixRetryBtn');
+                                if (retryBtn) retryBtn.addEventListener('click', function () {
+                                    if (!currentPixCustomerId) return;
+                                    if (pixStatusInterval) { clearInterval(pixStatusInterval); }
+                                    pixStatusInterval = setInterval(checkPixStatusPost, 5000);
+                                    checkPixStatusPost();
+                                });
+                            }, 50);
+                        }
+                        return;
+                    }
+                }
+
+                if (data && data.status && String(data.status).toUpperCase() === 'ACTIVE') {
+                    console.log('[PIX] Payment confirmed! Status is ACTIVE');
+                    if (pixStatusInterval) { clearInterval(pixStatusInterval); pixStatusInterval = null; }
+                    var pixStatusEl = document.getElementById('pixStatus');
+                    if (pixStatusEl) {
+                        pixStatusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Pagamento confirmado!</span>';
+                    }
+                    if (!purchaseAlreadyPushed) {
+                        pushDataLayerEvent('purchase', {
+                            transaction_id: data.subscription_id || data.id || currentPixCustomerId || ('pix_' + Date.now()),
+                            payment_method: 'PIX',
+                            checkout_status: 'confirmed'
+                        });
+                        purchaseAlreadyPushed = true;
+                    }
+                    setTimeout(() => window.goToStep(4), 1500);
+                } else {
+                    var pixStatusElWait = document.getElementById('pixStatus');
+                    if (pixStatusElWait) {
+                        var now = new Date();
+                        var smallEl = pixStatusElWait.querySelector('.small');
+                        if (smallEl) smallEl.textContent = 'Última verificação: ' + now.toLocaleTimeString();
+                    }
+                    console.log('[PIX] Still waiting... status:', data ? data.status : 'unknown');
+                }
+            })
+            .catch(function (err) {
+                console.warn('[PIX] status check failed', err);
+                var pixStatusElErr = document.getElementById('pixStatus');
+                if (pixStatusElErr) pixStatusElErr.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-triangle-fill"></i> Falha ao verificar status. Tentando novamente...</span>';
+            });
+        }
+
+        // ========== NOVAS MELHORIAS DE UX - PIX/CARTÃO BIFURCAÇÃO E TIMER ==========
+        
+        var pixQrGenerated = false;
+        var pixTimerInterval = null;
+        var pixTimeRemaining = 30 * 60; // 30 minutos em segundos
+        
+        // Event listeners para badges de método de pagamento
+        var methodBadges = document.querySelectorAll('.payment-method-badge');
+        methodBadges.forEach(function(badge) {
+            badge.addEventListener('click', function() {
+                var method = this.getAttribute('data-method');
+                selectPaymentMethodWithBifurcation(method);
+            });
+        });
+        
+        function selectPaymentMethodWithBifurcation(method) {
+            // Se PIX já foi gerado, não permite voltar para cartão
+            if (pixQrGenerated && method === 'CREDIT_CARD') {
+                alert('Você já gerou um QR Code PIX. A cobrança será feita via PIX. Se desejar mudar, cancele e inicie um novo pedido.');
+                return;
+            }
+            
+            // Atualiza badges de seleção
+            methodBadges.forEach(function(badge) {
+                var badgeMethod = badge.getAttribute('data-method');
+                if (badgeMethod === method) {
+                    badge.classList.add('active');
+                    badge.classList.remove('inactive');
+                } else {
+                    badge.classList.remove('active');
+                    if (pixQrGenerated) {
+                        badge.classList.add('inactive');
+                    }
+                }
+            });
+            
+            selectPaymentMethod(method);
+            
+            // Mostrar/esconder botão gerar QR code
+            if (method === 'PIX') {
+                document.getElementById('generateQrBtn').style.display = 'block';
+            } else {
+                document.getElementById('generateQrBtn').style.display = 'none';
+                stopPixTimer();
+            }
+        }
+        
+        // Botão para gerar QR Code
+        var generateQrBtn = document.getElementById('generateQrBtn');
+        if (generateQrBtn) {
+            generateQrBtn.addEventListener('click', function() {
+                pixQrGenerated = true;
+                document.getElementById('pixQrGenerated').value = 'true';
+                
+                // Bloqueia voltarda para cartão
+                var creditCardBadge = document.querySelector('.payment-method-badge.credit-card');
+                creditCardBadge.classList.add('inactive');
+                
+                // Inicia o timer
+                startPixTimer();
+                
+                // Aqui você geraria o QR Code via API
+                // Para demo, vamos criar um placeholder
+                var qrContainer = document.getElementById('pixQrContainer');
+                qrContainer.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> QR Code PIX gerado! Abra seu app bancário e escaneie.</div>';
+                qrContainer.style.display = 'block';
+                
+                // Desabilitar o botão após gerar
+                generateQrBtn.disabled = true;
+                generateQrBtn.innerHTML = '<i class="bi bi-check-circle me-2"></i> QR Code Gerado';
+            });
+        }
+        
+        function startPixTimer() {
+            pixTimeRemaining = 30 * 60; // Reset para 30 minutos
+            var timerDisplay = document.getElementById('timerDisplay');
+            var pixTimer = document.getElementById('pixTimer');
+            pixTimer.style.display = 'flex';
+            
+            // Atualiza display imediatamente
+            updateTimerDisplay(timerDisplay);
+            
+            pixTimerInterval = setInterval(function() {
+                pixTimeRemaining--;
+                updateTimerDisplay(timerDisplay);
+                
+                if (pixTimeRemaining <= 0) {
+                    stopPixTimer();
+                    alert('Seu QR Code PIX expirou. Gere um novo para continuar.');
+                }
+            }, 1000);
+        }
+        
+        function stopPixTimer() {
+            if (pixTimerInterval) {
+                clearInterval(pixTimerInterval);
+                pixTimerInterval = null;
+            }
+            document.getElementById('pixTimer').style.display = 'none';
+        }
+        
+        function updateTimerDisplay(element) {
+            var minutes = Math.floor(pixTimeRemaining / 60);
+            var seconds = pixTimeRemaining % 60;
+            element.textContent = (minutes < 10 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+        }
+
+        setBirthDateMaxTo18YearsOld();
+
+        // Estado inicial: Individual (Ligue Saúde em Dia, Ligue Vida Plena, Ligue Viver Bem)
+        window.togglePlanType('individual', document.querySelector('.plan-toggle-btn[data-plan-type="individual"]'));
+    })();
+</script>
+</body>
+</html>

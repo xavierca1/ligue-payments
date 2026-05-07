@@ -1,0 +1,37 @@
+{
+  "name": "Maria Oliveira Costa",
+  "email": "maria.oliveira@test.com",
+  "cpf": "98765432109",
+  "plan_id": "plan_002",
+  "phone": "(21) 99999-8888",
+  "coupon_code": "PROMO10",
+  "checkout_action": "",
+  "birth_date": "1985-03-22",
+  "gender": "F",
+  "payment_method": "PIX",
+  "street": "Avenida Paulista",
+  "number": "1000",
+  "complement": "Sala 500",
+  "district": "Bela Vista",
+  "city": "São Paulo",
+  "state": "SP",
+  "zip_code": "01311-100",
+  "externalReference": "",
+  "card_holder": "",
+  "card_number": "",
+  "card_month": "",
+  "card_year": "",
+  "card_cvv": "",
+  "terms_accepted": true,
+  "terms_accepted_at": "2025-05-07T14:45:00Z",
+  "terms_version": "1.0",
+  "dependents": [
+    {
+      "name": "Filho Silva",
+      "birth_date": "2010-06-15",
+      "gender": "M",
+      "kinship": "FILHO",
+      "cpf": "12345678902"
+    }
+  ]
+}

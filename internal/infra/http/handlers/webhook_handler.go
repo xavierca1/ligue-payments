@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
@@ -51,6 +52,7 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		Payment struct {
 			ID       string `json:"id"`
 			Customer string `json:"customer"`
+			Status   string `json:"status"`
 		} `json:"payment"`
 	}
 
@@ -62,25 +64,27 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Eventos que ativam a assinatura:
-	// - PAYMENT_RECEIVED: PIX confirmado
-	// - PAYMENT_CONFIRMED: PIX confirmado (alternativo)
-	// - PAYMENT_APPROVED: Cartão de crédito aprovado
-	validEvents := []string{"PAYMENT_RECEIVED", "PAYMENT_CONFIRMED", "PAYMENT_APPROVED"}
-	isValid := false
-	for _, validEvent := range validEvents {
-		if event.Event == validEvent {
-			isValid = true
-			break
-		}
-	}
+	// - Qualquer PAYMENT_* com status de pagamento confirmado
+	//   (alguns tenants enviam PAYMENT_UPDATED/PAYMENT_CREATED com status final)
+	eventName := strings.ToUpper(strings.TrimSpace(event.Event))
+	paymentStatus := strings.ToUpper(strings.TrimSpace(event.Payment.Status))
 
-	if !isValid {
-		log.Printf("ℹ️ Webhook: Evento ignorado: %s", event.Event)
+	isPaymentEvent := strings.HasPrefix(eventName, "PAYMENT_")
+	isPaidStatus := paymentStatus == "RECEIVED" || paymentStatus == "CONFIRMED" || paymentStatus == "RECEIVED_IN_CASH"
+	isActivationEvent := eventName == "PAYMENT_RECEIVED" || eventName == "PAYMENT_CONFIRMED" || eventName == "PAYMENT_APPROVED"
+	shouldActivate := (isPaymentEvent && isPaidStatus) || isActivationEvent
+
+	if !shouldActivate {
+		if isPaymentEvent {
+			log.Printf("ℹ️ Webhook: Evento ignorado: %s (status=%s, payment_id=%s, customer=%s)", eventName, paymentStatus, strings.TrimSpace(event.Payment.ID), strings.TrimSpace(event.Payment.Customer))
+		} else {
+			log.Printf("ℹ️ Webhook: Evento ignorado: %s", eventName)
+		}
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	log.Printf("📥 Webhook: Evento recebido: %s para customer %s", event.Event, event.Payment.Customer)
+	log.Printf("📥 Webhook: Evento de ativação: %s (status=%s, payment_id=%s, customer=%s)", eventName, paymentStatus, strings.TrimSpace(event.Payment.ID), strings.TrimSpace(event.Payment.Customer))
 
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(event.Payment.Customer)
 	if err != nil {
@@ -97,16 +101,22 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.ActivateSubUC.Execute(r.Context(), input); err != nil {
 		log.Printf("❌ Webhook: Activation error: %v", err)
+		log.Printf("❌ Webhook: Detalhes - CustomerID=%s, GatewayID=%s, PaymentID=%s", localCustomer.ID, localCustomer.GatewayID, event.Payment.ID)
 
 		writeErrorResponse(w, http.StatusInternalServerError, "ACTIVATION_ERROR", "Erro ao ativar assinatura")
 		return
 	}
 
-	log.Printf("✅ Webhook: Subscription activated for customer %s", localCustomer.ID)
+	log.Printf("✅ Webhook: Subscription activated for customer %s (GatewayID=%s, PaymentID=%s)", localCustomer.ID, localCustomer.GatewayID, event.Payment.ID)
 	w.WriteHeader(http.StatusOK)
 }
 
 func verifyWebhookSignature(body, signature string) bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("ASAAS_WEBHOOK_SKIP_SIGNATURE")), "true") {
+		log.Println("⚠️ Webhook signature validation bypassed via ASAAS_WEBHOOK_SKIP_SIGNATURE=true")
+		return true
+	}
+
 	webhookSecret := os.Getenv("ASAAS_WEBHOOK_SECRET")
 	if webhookSecret == "" {
 		log.Println("⚠️ ASAAS_WEBHOOK_SECRET não configurado")
@@ -114,10 +124,11 @@ func verifyWebhookSignature(body, signature string) bool {
 	}
 
 	hash := sha256.Sum256([]byte(body + webhookSecret))
-	expectedSig := fmt.Sprintf("%x", hash)
+	expectedSig := strings.ToLower(strings.TrimSpace(fmt.Sprintf("%x", hash)))
+	providedSig := strings.ToLower(strings.TrimSpace(signature))
 
 	return subtle.ConstantTimeCompare(
-		[]byte(signature),
+		[]byte(providedSig),
 		[]byte(expectedSig),
 	) == 1
 }

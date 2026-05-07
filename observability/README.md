@@ -1,139 +1,65 @@
-# 📊 Observabilidade - Ligue Payments
+# 📊 Observabilidade - Datadog
 
-Stack completa de monitoramento self-hosted com Grafana, Prometheus e Loki.
+O projeto agora envia métricas para o Datadog via DogStatsD.
 
-## 🚀 Setup Rápido
+## Setup rápido
 
-### 1. Instalar dependências Go
-
-```bash
-go get github.com/prometheus/client_golang/prometheus
-go get github.com/prometheus/client_golang/prometheus/promauto
-go get github.com/prometheus/client_golang/prometheus/promhttp
-```
-
-### 2. Subir stack de monitoramento
+1. Configure as variáveis de ambiente:
 
 ```bash
-# Criar diretórios necessários
-mkdir -p logs observability/dashboards
-
-# Subir containers
-docker-compose -f docker-compose.monitoring.yml up -d
-
-# Verificar se subiu
-docker ps
+export DD_API_KEY=seu_token
+export DD_SITE=datadoghq.com
+export DD_ENV=local
+export DD_SERVICE=ligue-payments
 ```
 
-### 3. Acessar Dashboards
-
-- **Grafana**: http://localhost:3000 (admin / ligue2026)
-- **Prometheus**: http://localhost:9090
-- **Loki**: http://localhost:3100
-
-### 4. Importar Dashboard Pronto
-
-1. Acesse Grafana → Dashboards → Import
-2. Cole o JSON de `observability/dashboards/ligue-payments.json`
-3. Selecione datasource Prometheus
-4. Pronto! 🎉
-
-## 📈 Métricas Disponíveis
-
-### HTTP Requests
-- `http_requests_total` - Total de requisições por método, path e status
-- `http_request_duration_seconds` - Latência das requisições
-- `http_active_connections` - Conexões ativas
-
-### Business Metrics
-- `payments_received_total` - Pagamentos recebidos (PIX/Cartão)
-- `subscriptions_activated_total` - Assinaturas ativadas
-- `integration_errors_total` - Erros de integração (Asaas, Doc24, etc)
-
-### System Health
-- `/health` - Status detalhado de dependências
-- `/metrics` - Endpoint Prometheus
-- `/healthz` & `/ready` - Kubernetes probes
-
-## 🔍 Queries Úteis (Prometheus)
-
-```promql
-# Taxa de requisições por segundo
-rate(http_requests_total[5m])
-
-# Latência P95
-histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
-
-# Taxa de erro (>= 400)
-rate(http_requests_total{status=~"4..|5.."}[5m])
-
-# Pagamentos por hora
-increase(payments_received_total[1h])
-```
-
-## 📋 Dashboard Mostra
-
-✅ **Requests por segundo** (gráfico de linha)  
-✅ **Latência P50/P95/P99** (gauges)  
-✅ **Taxa de erro** (%)  
-✅ **Top 10 IPs fazendo requests** (tabela)  
-✅ **Pagamentos recebidos** (counter)  
-✅ **Métodos de pagamento** (pie chart)  
-✅ **Status de dependências** (health checks)  
-✅ **Logs em tempo real** (Loki)
-
-## 🎯 Alertas Recomendados
-
-Configure no Grafana:
-- Taxa de erro > 5% por 5min → Alerta
-- Latência P95 > 2s → Warning
-- Database down → Critical
-- RabbitMQ fila > 100 mensagens → Warning
-
-## 🔧 Deploy em Produção
-
-### No EC2:
+2. Suba a stack com o agente:
 
 ```bash
-# 1. Clonar repo
-git clone seu-repo && cd ligue-payments
-
-# 2. Subir stack
-docker-compose -f docker-compose.monitoring.yml up -d
-
-# 3. Configurar nginx para proxy reverso
-sudo nano /etc/nginx/sites-available/grafana
-
-# /etc/nginx/sites-available/grafana
-server {
-    listen 80;
-    server_name grafana.seudominio.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-
-# 4. Ativar e recarregar
-sudo ln -s /etc/nginx/sites-available/grafana /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
+docker-compose up -d
 ```
 
-### Recursos Necessários:
-- RAM: ~500MB para toda stack
-- CPU: Negligível
-- Disco: ~1GB/dia de logs (configurável)
+3. Confira no Datadog as métricas com prefixo `ligue_payments.`.
 
-## 🛡️ Segurança
+## Métricas enviadas
 
-Troque senha padrão do Grafana:
-```bash
-docker exec -it grafana grafana-cli admin reset-admin-password NovaSenhaSegura123
-```
+- `http.requests`
+- `http.request_duration`
+- `http.active_connections`
+- `queue.messages_published`
+- `queue.messages_consumed`
+- `queue.size`
+- `queue.processing_duration`
+- `queue.message_arrival_latency`
+- `integration.errors`
 
-## 📱 Alertas por Telegram/Slack
+## Tags padrão
 
-Configure em Grafana → Alerting → Contact points
+- `service:ligue-payments`
+- `env:<ambiente>`
+- `method:<verbo>`
+- `path:<rota>`
+- `status:<código>`
+
+## Dashboard pronto (import)
+
+Arquivo pronto para importar no Datadog:
+
+- `observability/datadog-dashboard.json`
+
+Passos:
+
+1. Datadog → Dashboards → New Dashboard
+2. Clique em **Import from JSON**
+3. Cole o conteúdo de `observability/datadog-dashboard.json`
+4. Salve o dashboard
+
+O dashboard já inclui widgets para:
+
+- Requests HTTP
+- Latência média de request
+- Conexões ativas
+- Pagamentos recebidos
+- Assinaturas ativadas
+- Erros de integração
 

@@ -47,12 +47,18 @@ func (m *MockSubscriptionRepositoryHandler) FindLastByCustomerID(ctx context.Con
 	return args.Get(0).(*entity.Subscription), args.Error(1)
 }
 
+func (m *MockSubscriptionRepositoryHandler) DeleteByID(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // ============ TESTES DO HANDLER ============
 
 // TestCreateCheckoutHandlerPixSuccess - Teste do checkout com PIX
 func TestCreateCheckoutHandlerPixSuccess(t *testing.T) {
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepositoryHandler)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -83,7 +89,7 @@ func TestCreateCheckoutHandlerPixSuccess(t *testing.T) {
 		nil,
 	)
 
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	// Request body
 	input := usecase.CreateCustomerInput{
@@ -128,8 +134,9 @@ func TestCreateCheckoutHandlerPixSuccess(t *testing.T) {
 // TestCreateCheckoutHandlerInvalidJSON - Teste com JSON inválido
 func TestCreateCheckoutHandlerInvalidJSON(t *testing.T) {
 	mockSubRepo := new(MockSubscriptionRepositoryHandler)
+	mockCustomerRepo := new(MockCustomerRepository)
 	uc := usecase.NewCreateCustomerUseCase(nil, nil, nil, nil, nil, nil, nil, "", nil)
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	req := httptest.NewRequest("POST", "/checkout", bytes.NewReader([]byte("invalid json")))
 	w := httptest.NewRecorder()
@@ -149,6 +156,7 @@ func TestCreateCheckoutHandlerValidationError(t *testing.T) {
 
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
@@ -161,7 +169,7 @@ func TestCreateCheckoutHandlerValidationError(t *testing.T) {
 		nil,
 	)
 
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	// Input com email inválido
 	input := usecase.CreateCustomerInput{
@@ -216,7 +224,7 @@ func TestGetStatusHandlerSuccess(t *testing.T) {
 		nil,
 	)
 
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	req := httptest.NewRequest("GET", "/customers/cust-123/status", nil)
 
@@ -254,7 +262,7 @@ func TestGetStatusHandlerMissingID(t *testing.T) {
 		nil,
 	)
 
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	req := httptest.NewRequest("GET", "/customers//status", nil)
 
@@ -294,7 +302,7 @@ func TestGetStatusHandlerNotFound(t *testing.T) {
 		nil,
 	)
 
-	handler := handlers.NewCustomerHandler(uc, mockSubRepo)
+	handler := handlers.NewCustomerHandler(uc, mockSubRepo, mockCustomerRepo)
 
 	req := httptest.NewRequest("GET", "/customers/cust-999/status", nil)
 

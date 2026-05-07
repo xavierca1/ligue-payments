@@ -2,8 +2,11 @@ package mail
 
 type WelcomeEmailData struct {
 	Name        string
+	FirstName   string
 	PDFLink     string
 	ProductName string
+	PortalURL   string
+	WhatsAppURL string
 }
 
 type EmailSender struct {
@@ -11,4 +14,5 @@ type EmailSender struct {
 	Port     int
 	User     string
 	Password string
+	From     string
 }

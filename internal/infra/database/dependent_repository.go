@@ -17,8 +17,8 @@ func NewDependentRepository(db *sql.DB) *DependentRepository {
 }
 
 func (r *DependentRepository) Create(ctx context.Context, dependent *entity.Dependent) error {
-	query := `INSERT INTO dependents (id, customer_id, name, cpf, birth_date, gender, kinship, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	_, err := r.DB.ExecContext(ctx, query, dependent.ID, dependent.CustomerID, dependent.Name, dependent.CPF, dependent.BirthDate, dependent.Gender, dependent.Kinship, dependent.CreatedAt, dependent.UpdatedAt)
+	query := `INSERT INTO dependents (id, customer_id, nro_documento_titular, name, cpf, birth_date, gender, kinship, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+	_, err := r.DB.ExecContext(ctx, query, dependent.ID, dependent.CustomerID, dependent.NroDocumentoTitular, dependent.Name, dependent.CPF, dependent.BirthDate, dependent.Gender, dependent.Kinship, dependent.CreatedAt, dependent.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("erro ao criar dependente: %w", err)
 	}
@@ -26,7 +26,7 @@ func (r *DependentRepository) Create(ctx context.Context, dependent *entity.Depe
 }
 
 func (r *DependentRepository) FindByCustomerID(ctx context.Context, customerID string) ([]*entity.Dependent, error) {
-	query := `SELECT id, customer_id, name, cpf, birth_date, gender, kinship, created_at, updated_at FROM dependents WHERE customer_id = $1 ORDER BY created_at ASC`
+	query := `SELECT id, customer_id, nro_documento_titular, name, cpf, birth_date, gender, kinship, created_at, updated_at FROM dependents WHERE customer_id = $1 ORDER BY created_at ASC`
 	rows, err := r.DB.QueryContext(ctx, query, customerID)
 	if err != nil {
 		return nil, fmt.Errorf("erro ao buscar dependentes: %w", err)
@@ -35,7 +35,7 @@ func (r *DependentRepository) FindByCustomerID(ctx context.Context, customerID s
 	var dependents []*entity.Dependent
 	for rows.Next() {
 		dep := &entity.Dependent{}
-		err := rows.Scan(&dep.ID, &dep.CustomerID, &dep.Name, &dep.CPF, &dep.BirthDate, &dep.Gender, &dep.Kinship, &dep.CreatedAt, &dep.UpdatedAt)
+		err := rows.Scan(&dep.ID, &dep.CustomerID, &dep.NroDocumentoTitular, &dep.Name, &dep.CPF, &dep.BirthDate, &dep.Gender, &dep.Kinship, &dep.CreatedAt, &dep.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("erro ao escanear dependente: %w", err)
 		}
@@ -45,9 +45,9 @@ func (r *DependentRepository) FindByCustomerID(ctx context.Context, customerID s
 }
 
 func (r *DependentRepository) FindByID(ctx context.Context, id string) (*entity.Dependent, error) {
-	query := `SELECT id, customer_id, name, cpf, birth_date, gender, kinship, created_at, updated_at FROM dependents WHERE id = $1`
+	query := `SELECT id, customer_id, nro_documento_titular, name, cpf, birth_date, gender, kinship, created_at, updated_at FROM dependents WHERE id = $1`
 	dep := &entity.Dependent{}
-	err := r.DB.QueryRowContext(ctx, query, id).Scan(&dep.ID, &dep.CustomerID, &dep.Name, &dep.CPF, &dep.BirthDate, &dep.Gender, &dep.Kinship, &dep.CreatedAt, &dep.UpdatedAt)
+	err := r.DB.QueryRowContext(ctx, query, id).Scan(&dep.ID, &dep.CustomerID, &dep.NroDocumentoTitular, &dep.Name, &dep.CPF, &dep.BirthDate, &dep.Gender, &dep.Kinship, &dep.CreatedAt, &dep.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("dependente não encontrado")
@@ -58,8 +58,8 @@ func (r *DependentRepository) FindByID(ctx context.Context, id string) (*entity.
 }
 
 func (r *DependentRepository) Update(ctx context.Context, dependent *entity.Dependent) error {
-	query := `UPDATE dependents SET name = $2, cpf = $3, birth_date = $4, gender = $5, kinship = $6, updated_at = $7 WHERE id = $1`
-	_, err := r.DB.ExecContext(ctx, query, dependent.ID, dependent.Name, dependent.CPF, dependent.BirthDate, dependent.Gender, dependent.Kinship, dependent.UpdatedAt)
+	query := `UPDATE dependents SET nro_documento_titular = $2, name = $3, cpf = $4, birth_date = $5, gender = $6, kinship = $7, updated_at = $8 WHERE id = $1`
+	_, err := r.DB.ExecContext(ctx, query, dependent.ID, dependent.NroDocumentoTitular, dependent.Name, dependent.CPF, dependent.BirthDate, dependent.Gender, dependent.Kinship, dependent.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("erro ao atualizar dependente: %w", err)
 	}

@@ -53,6 +53,22 @@ func (m *MockCustomerRepository) FindByID(ctx context.Context, id string) (*enti
 	return args.Get(0).(*entity.Customer), args.Error(1)
 }
 
+func (m *MockCustomerRepository) FindByCPF(ctx context.Context, cpf string) (*entity.Customer, error) {
+	args := m.Called(ctx, cpf)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.Customer), args.Error(1)
+}
+
+func (m *MockCustomerRepository) FindByEmailAndProductID(ctx context.Context, email, productID string) (*entity.Customer, error) {
+	args := m.Called(ctx, email, productID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*entity.Customer), args.Error(1)
+}
+
 func (m *MockCustomerRepository) CheckDuplicity(ctx context.Context, email, cpf string) (bool, error) {
 	args := m.Called(ctx, email, cpf)
 	return args.Bool(0), args.Error(1)
@@ -65,6 +81,16 @@ func (m *MockCustomerRepository) Delete(ctx context.Context, id string) error {
 
 func (m *MockCustomerRepository) UpdateProviderID(ctx context.Context, customerID, providerID string) error {
 	args := m.Called(ctx, customerID, providerID)
+	return args.Error(0)
+}
+
+func (m *MockCustomerRepository) UpdateGatewayID(ctx context.Context, customerID, gatewayID string) error {
+	args := m.Called(ctx, customerID, gatewayID)
+	return args.Error(0)
+}
+
+func (m *MockCustomerRepository) UpdateStatus(ctx context.Context, customerID, status string) error {
+	args := m.Called(ctx, customerID, status)
 	return args.Error(0)
 }
 
@@ -96,6 +122,11 @@ func (m *MockSubscriptionRepository) FindLastByCustomerID(ctx context.Context, c
 	return args.Get(0).(*entity.Subscription), args.Error(1)
 }
 
+func (m *MockSubscriptionRepository) DeleteByID(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // MockPaymentGateway
 type MockPaymentGateway struct {
 	mock.Mock
@@ -119,6 +150,19 @@ func (m *MockPaymentGateway) SubscribePix(input asaas.SubscribePixInput) (string
 	return args.String(0), args.Get(1).(*asaas.PixOutput), args.Error(2)
 }
 
+func (m *MockPaymentGateway) GetPixBySubscriptionID(subscriptionID string) (*asaas.PixOutput, error) {
+	args := m.Called(subscriptionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*asaas.PixOutput), args.Error(1)
+}
+
+func (m *MockPaymentGateway) DeleteSubscription(subscriptionID string) error {
+	args := m.Called(subscriptionID)
+	return args.Error(0)
+}
+
 // MockQueueProducer
 type MockQueueProducer struct {
 	mock.Mock
@@ -140,8 +184,48 @@ func (m *MockEmailService) SendWelcome(to, name, productName, pdfLink string) er
 }
 
 func (m *MockEmailService) SendWelcomeEmail(name, email string) error {
-	args := m.Called(name, email)
-	return args.Error(0)
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "SendWelcomeEmail" {
+			args := m.Called(name, email)
+			return args.Error(0)
+		}
+	}
+
+	// Em testes que não validam email, não quebrar por chamadas assíncronas.
+	return nil
+}
+
+func (m *MockEmailService) SendWelcomeEmailWithCard(name, email, cpf, planName, providerID string) error {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "SendWelcomeEmailWithCard" {
+			args := m.Called(name, email, cpf, planName, providerID)
+			return args.Error(0)
+		}
+	}
+
+	return nil
+}
+
+func (m *MockEmailService) SendWelcomeEmailWithCardAndDependents(name, email, cpf, planName, providerID string, dependents []*entity.Dependent) error {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "SendWelcomeEmailWithCardAndDependents" {
+			args := m.Called(name, email, cpf, planName, providerID, dependents)
+			return args.Error(0)
+		}
+	}
+
+	return nil
+}
+
+func (m *MockEmailService) SendWelcomeEmailWithContractAndDependents(name, email, cpf, planName, providerID string, dependents []*entity.Dependent, contractPDF []byte) error {
+	for _, call := range m.ExpectedCalls {
+		if call.Method == "SendWelcomeEmailWithContractAndDependents" {
+			args := m.Called(name, email, cpf, planName, providerID, dependents, contractPDF)
+			return args.Error(0)
+		}
+	}
+
+	return nil
 }
 
 type MockWhatsAppService struct {
@@ -198,6 +282,8 @@ func TestCreateCustomerPixFlowSuccess(t *testing.T) {
 	// Setup dos mocks
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -282,6 +368,8 @@ func TestCreateCustomerCreditCardFlowSuccess(t *testing.T) {
 	// Setup dos mocks
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -368,6 +456,8 @@ func TestCreateCustomerValidationFailure(t *testing.T) {
 
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -420,6 +510,8 @@ func TestCreateCustomerPlanNotFound(t *testing.T) {
 
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -471,6 +563,8 @@ func TestCreateCustomerPaymentFailure(t *testing.T) {
 
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -534,6 +628,8 @@ func TestCreateCustomerDatabaseFailureRollback(t *testing.T) {
 
 	mockPlanRepo := new(MockPlanRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
+	mockCustomerRepo.On("FindByEmailAndProductID", mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("sql: no rows in result set"))
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockGateway := new(MockPaymentGateway)
 	mockQueue := new(MockQueueProducer)
@@ -597,4 +693,204 @@ func TestCreateCustomerDatabaseFailureRollback(t *testing.T) {
 
 	// Verifica que foi feito rollback do customer
 	mockCustomerRepo.AssertCalled(t, "Delete", ctx, mock.Anything)
+}
+
+func TestCreateCustomerPendingPixReuseExistingCharge(t *testing.T) {
+	ctx := context.Background()
+
+	mockPlanRepo := new(MockPlanRepository)
+	mockCustomerRepo := new(MockCustomerRepository)
+	mockSubRepo := new(MockSubscriptionRepository)
+	mockGateway := new(MockPaymentGateway)
+	mockQueue := new(MockQueueProducer)
+	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	plan := &entity.Plan{ID: "plan-123", Name: "Plano Premium", PriceCents: 29900, Provider: "DOC24", ProductID: "prod-123"}
+	customer := &entity.Customer{ID: "cust-123", GatewayID: "asaas-cust-123", SubscriptionID: "asaas-sub-123", Status: "PENDING"}
+	pendingSub := &entity.Subscription{
+		ID:         "sub-123",
+		CustomerID: customer.ID,
+		PlanID:     plan.ID,
+		ProductID:  plan.ProductID,
+		Status:     "PENDING",
+		CreatedAt:  time.Now().Add(-2 * time.Hour),
+	}
+
+	mockPlanRepo.On("FindByID", ctx, "plan-123").Return(plan, nil)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(customer, nil)
+	mockSubRepo.On("FindLastByCustomerID", ctx, customer.ID).Return(pendingSub, nil)
+	mockGateway.On("GetPixBySubscriptionID", "asaas-sub-123").Return(&asaas.PixOutput{
+		CopyPaste: "00020126580014br.gov.bcb.pix",
+		URL:       "data:image/png;base64,existing",
+	}, nil)
+
+	uc := usecase.NewCreateCustomerUseCase(mockCustomerRepo, mockSubRepo, mockPlanRepo, mockGateway, mockQueue, mockEmailService, nil, "https://storage.example.com", nil)
+
+	input := usecase.CreateCustomerInput{
+		Name:            "João Silva",
+		Email:           "joao@example.com",
+		CPF:             "123.456.789-00",
+		Phone:           "11999999999",
+		BirthDate:       "1990-05-15",
+		Gender:          "1",
+		PlanID:          "plan-123",
+		PaymentMethod:   "PIX",
+		CheckoutAction:  "PAY",
+		Street:          "Rua A",
+		Number:          "123",
+		District:        "Centro",
+		City:            "São Paulo",
+		State:           "SP",
+		ZipCode:         "01310100",
+		TermsAccepted:   true,
+		TermsAcceptedAt: time.Now().Format(time.RFC3339),
+		TermsVersion:    "1.0",
+	}
+
+	output, err := uc.Execute(ctx, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, "WAITING_PAYMENT", output.Status)
+	assert.Equal(t, "cust-123", output.ID)
+	assert.NotEmpty(t, output.PixCode)
+	assert.NotEmpty(t, output.PixQRCodeURL)
+	mockGateway.AssertNotCalled(t, "CreateCustomer", mock.Anything)
+	mockGateway.AssertNotCalled(t, "SubscribePix", mock.Anything)
+	mockSubRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	mockCustomerRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+}
+
+func TestCreateCustomerPendingPixRetryRecreatesCustomer(t *testing.T) {
+	ctx := context.Background()
+
+	mockPlanRepo := new(MockPlanRepository)
+	mockCustomerRepo := new(MockCustomerRepository)
+	mockSubRepo := new(MockSubscriptionRepository)
+	mockGateway := new(MockPaymentGateway)
+	mockQueue := new(MockQueueProducer)
+	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	plan := &entity.Plan{ID: "plan-123", Name: "Plano Premium", PriceCents: 29900, Provider: "DOC24", ProductID: "prod-123"}
+	customer := &entity.Customer{ID: "cust-123", GatewayID: "asaas-cust-old", SubscriptionID: "asaas-sub-old", Status: "PENDING"}
+	pendingSub := &entity.Subscription{
+		ID:         "sub-old",
+		CustomerID: customer.ID,
+		PlanID:     plan.ID,
+		ProductID:  plan.ProductID,
+		Status:     "PENDING",
+		CreatedAt:  time.Now().Add(-1 * time.Hour),
+	}
+
+	mockPlanRepo.On("FindByID", ctx, "plan-123").Return(plan, nil)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(customer, nil)
+	mockSubRepo.On("FindLastByCustomerID", ctx, customer.ID).Return(pendingSub, nil)
+	mockSubRepo.On("DeleteByID", ctx, pendingSub.ID).Return(nil)
+	mockCustomerRepo.On("Delete", ctx, customer.ID).Return(nil)
+	mockGateway.On("CreateCustomer", mock.Anything).Return("asaas-cust-new", nil)
+	mockGateway.On("SubscribePix", mock.Anything).Return("asaas-sub-new", &asaas.PixOutput{
+		CopyPaste: "00020126580014br.gov.bcb.pix.new",
+		URL:       "data:image/png;base64,new",
+	}, nil)
+	mockCustomerRepo.On("Create", ctx, mock.Anything).Return(nil)
+	mockSubRepo.On("Create", ctx, mock.Anything).Return(nil)
+
+	uc := usecase.NewCreateCustomerUseCase(mockCustomerRepo, mockSubRepo, mockPlanRepo, mockGateway, mockQueue, mockEmailService, nil, "https://storage.example.com", nil)
+
+	input := usecase.CreateCustomerInput{
+		Name:            "João Silva Corrigido",
+		Email:           "joao.novo@example.com",
+		CPF:             "123.456.789-00",
+		Phone:           "11988887777",
+		BirthDate:       "1990-05-15",
+		Gender:          "1",
+		PlanID:          "plan-123",
+		PaymentMethod:   "PIX",
+		CheckoutAction:  "RETRY",
+		Street:          "Rua B",
+		Number:          "321",
+		District:        "Centro",
+		City:            "São Paulo",
+		State:           "SP",
+		ZipCode:         "01310100",
+		TermsAccepted:   true,
+		TermsAcceptedAt: time.Now().Format(time.RFC3339),
+		TermsVersion:    "1.0",
+	}
+
+	output, err := uc.Execute(ctx, input)
+
+	assert.NoError(t, err)
+	assert.NotNil(t, output)
+	assert.Equal(t, "WAITING_PAYMENT", output.Status)
+	assert.Equal(t, "asaas-sub-new", output.ID)
+	assert.NotEmpty(t, output.PixCode)
+	assert.NotEmpty(t, output.PixQRCodeURL)
+	mockSubRepo.AssertCalled(t, "DeleteByID", ctx, pendingSub.ID)
+	mockCustomerRepo.AssertCalled(t, "Delete", ctx, customer.ID)
+	mockGateway.AssertCalled(t, "CreateCustomer", mock.Anything)
+	mockGateway.AssertCalled(t, "SubscribePix", mock.Anything)
+}
+
+func TestCreateCustomerPendingPixOlderThan24HoursBlocks(t *testing.T) {
+	ctx := context.Background()
+
+	mockPlanRepo := new(MockPlanRepository)
+	mockCustomerRepo := new(MockCustomerRepository)
+	mockSubRepo := new(MockSubscriptionRepository)
+	mockGateway := new(MockPaymentGateway)
+	mockQueue := new(MockQueueProducer)
+	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcome", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	plan := &entity.Plan{ID: "plan-123", Name: "Plano Premium", PriceCents: 29900, Provider: "DOC24", ProductID: "prod-123"}
+	customer := &entity.Customer{ID: "cust-123", GatewayID: "asaas-cust-123", SubscriptionID: "asaas-sub-123", Status: "PENDING"}
+	pendingSub := &entity.Subscription{
+		ID:         "sub-123",
+		CustomerID: customer.ID,
+		PlanID:     plan.ID,
+		ProductID:  plan.ProductID,
+		Status:     "PENDING",
+		CreatedAt:  time.Now().Add(-25 * time.Hour),
+	}
+
+	mockPlanRepo.On("FindByID", ctx, "plan-123").Return(plan, nil)
+	mockCustomerRepo.On("FindByCPF", mock.Anything, mock.Anything).Return(customer, nil)
+	mockSubRepo.On("FindLastByCustomerID", ctx, customer.ID).Return(pendingSub, nil)
+
+	uc := usecase.NewCreateCustomerUseCase(mockCustomerRepo, mockSubRepo, mockPlanRepo, mockGateway, mockQueue, mockEmailService, nil, "https://storage.example.com", nil)
+
+	input := usecase.CreateCustomerInput{
+		Name:            "João Silva",
+		Email:           "joao@example.com",
+		CPF:             "123.456.789-00",
+		Phone:           "11999999999",
+		BirthDate:       "1990-05-15",
+		Gender:          "1",
+		PlanID:          "plan-123",
+		PaymentMethod:   "PIX",
+		CheckoutAction:  "PAY",
+		Street:          "Rua A",
+		Number:          "123",
+		District:        "Centro",
+		City:            "São Paulo",
+		State:           "SP",
+		ZipCode:         "01310100",
+		TermsAccepted:   true,
+		TermsAcceptedAt: time.Now().Format(time.RFC3339),
+		TermsVersion:    "1.0",
+	}
+
+	output, err := uc.Execute(ctx, input)
+
+	assert.Error(t, err)
+	assert.Nil(t, output)
+	assert.True(t, usecase.IsDomainError(err))
+	assert.Contains(t, err.Error(), "Entre em contato com o SAC")
+	mockGateway.AssertNotCalled(t, "CreateCustomer", mock.Anything)
+	mockGateway.AssertNotCalled(t, "SubscribePix", mock.Anything)
+	mockCustomerRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+	mockSubRepo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
 }

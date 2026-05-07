@@ -6,29 +6,51 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-chi/cors"
 	"github.com/joho/godotenv"
-	_ "github.com/lib/pq"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rabbitmq/amqp091-go"
 
+	// Driver PGX (Novo) - Compatível com Supabase Pooler
+	"github.com/jackc/pgx/v5/stdlib"
+
+	// Datadog APM
+	sqltrace "github.com/DataDog/dd-trace-go/contrib/database/sql/v2"
+	chitrace "github.com/DataDog/dd-trace-go/contrib/go-chi/chi.v5/v2"
+	"github.com/DataDog/dd-trace-go/v2/ddtrace/tracer"
+
+	// Importações Internas do CorePay
 	"github.com/xavierca1/ligue-payments/internal/infra/database"
 	"github.com/xavierca1/ligue-payments/internal/infra/http/handlers"
 	httpMiddleware "github.com/xavierca1/ligue-payments/internal/infra/http/middleware"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/doc24"
+	"github.com/xavierca1/ligue-payments/internal/infra/integration/docuseal"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/kommo"
 	"github.com/xavierca1/ligue-payments/internal/infra/mail"
+	"github.com/xavierca1/ligue-payments/internal/infra/pdf"
 	"github.com/xavierca1/ligue-payments/internal/infra/queue"
+	"github.com/xavierca1/ligue-payments/internal/infra/storage"
 	"github.com/xavierca1/ligue-payments/internal/infra/worker"
 	"github.com/xavierca1/ligue-payments/internal/usecase"
 )
 
+// ==========================================
+// ADAPTERS & MIDDLEWARES
+// ==========================================
+
 // KommoAdapter adapta o Kommo Client para a interface KommoService
 type KommoAdapter struct {
 	client *kommo.Client
+}
+
+type noopQueueProducer struct{}
+
+func (n *noopQueueProducer) PublishActivation(ctx context.Context, payload queue.ActivationPayload) error {
+	return nil
 }
 
 func (a *KommoAdapter) CreateLead(customerName, phone, email, planName string, price int) (int, error) {
@@ -41,13 +63,46 @@ func (a *KommoAdapter) CreateLead(customerName, phone, email, planName string, p
 	})
 }
 
-func main() {
-	godotenv.Load()
+func permissiveCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin == "" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else if strings.EqualFold(origin, "null") {
+			w.Header().Set("Access-Control-Allow-Origin", "null")
+			w.Header().Add("Vary", "Origin")
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+		}
 
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-	if err != nil {
-		log.Fatal(err)
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-CSRF-Token, X-Asaas-Signature, ngrok-skip-browser-warning")
+		w.Header().Set("Access-Control-Max-Age", "300")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// ==========================================
+// PONTO DE ENTRADA (MAIN)
+// ==========================================
+
+func main() {
+	// 1. Variáveis de Ambiente e Monitoramento
+	if os.Getenv("RUNNING_IN_DOCKER") != "true" && os.Getenv("DOCKER_CONTAINER") != "true" {
+		_ = godotenv.Load()
 	}
+	tracer.Start()
+	defer tracer.Stop()
+
+	// 2. Conexões de Infraestrutura (DB e Filas)
+	db := setupDatabase()
 	defer db.Close()
 
 	rabbitMQ, err := queue.NewRabbitMQ(
@@ -57,38 +112,58 @@ func main() {
 		os.Getenv("RABBITMQ_PORT"),
 	)
 	if err != nil {
-		panic(err)
+		log.Printf("⚠️ RabbitMQ indisponível, iniciando API sem fila: %v", err)
 	}
-	defer rabbitMQ.Conn.Close()
-	defer rabbitMQ.Ch.Close()
+	if rabbitMQ != nil {
+		defer rabbitMQ.Conn.Close()
+		defer rabbitMQ.Ch.Close()
+	}
 
-	// Repositories
+	// 3. Inicialização de Repositórios
 	customerRepo := database.NewCustomerRepository(db)
 	planRepo := database.NewPlanRepository(db)
 	subRepo := database.NewSubscriptionRepository(db)
 	leadRepo := &database.LeadRepository{DB: db}
 	dependentRepo := database.NewDependentRepository(db)
+	couponRepo := database.NewCouponRepository(db)
+	usecase.SetCouponTracker(couponRepo)
 
-	// External Services
+	// 4. Integrações e Serviços Externos
+	mailSender := setupEmailService()
 	gateway := asaas.NewClient(os.Getenv("ASAAS_API_KEY"), os.Getenv("ASAAS_URL"))
-	producer := queue.NewProducer(rabbitMQ.Conn, rabbitMQ.Ch)
-	mailSender := mail.NewEmailSender(
-		os.Getenv("MAIL_HOST"), 587, os.Getenv("MAIL_USER"), os.Getenv("MAIL_PASS"),
-	)
-	kommoClient := kommo.NewClient()
-	kommoAdapter := &KommoAdapter{client: kommoClient}
+	var producer usecase.QueueProducerInterface = &noopQueueProducer{}
+	if rabbitMQ != nil {
+		producer = queue.NewProducer(rabbitMQ.Conn, rabbitMQ.Ch)
+	}
+	kommoAdapter := &KommoAdapter{client: kommo.NewClient()}
+
+	var contractStorage usecase.ContractStorageInterface
+	contractProjectURL := strings.TrimSpace(os.Getenv("SUPABASE_CONTRACTS_PROJECT_URL"))
+	contractBucket := strings.TrimSpace(os.Getenv("SUPABASE_CONTRACTS_BUCKET"))
+	contractServiceKey := strings.TrimSpace(os.Getenv("SUPABASE_CONTRACTS_SERVICE_ROLE_KEY"))
+	if contractProjectURL != "" && contractBucket != "" && contractServiceKey != "" {
+		contractStorage = storage.NewSupabaseStorage(contractProjectURL, contractBucket, contractServiceKey)
+		log.Printf("✅ Storage de contratos inicializado no bucket %s", contractBucket)
+	} else {
+		log.Println("⚠️ Storage de contratos não configurado; PDFs serão enviados apenas por email")
+	}
+
+	// Dica de segurança: considere mover esse token para o .env no futuro ;)
 	docClient := doc24.NewClient("liguemed", "J3xpZW50U2VjjkV0RG9jMjRNiOJlNDM=")
 
-	// Background Workers
-	queueWorker := queue.NewWorker(rabbitMQ.Ch, docClient, customerRepo)
-	go queueWorker.Start(queue.QueueName)
+	// DocuSeal client (opcional - usa variáveis de ambiente DOCUSEAL_API_URL e DOCUSEAL_API_KEY)
+	docuSealClient := docuseal.NewClient(strings.TrimSpace(os.Getenv("DOCUSEAL_API_URL")), strings.TrimSpace(os.Getenv("DOCUSEAL_API_KEY")))
 
-	// Worker de Expiração de PIX (30 min)
+	// 5. Workers de Background
+	if rabbitMQ != nil {
+		queueWorker := queue.NewWorker(rabbitMQ.Ch, docClient, customerRepo)
+		go queueWorker.Start(queue.QueueName)
+	}
+
 	pixWorker := worker.NewPixExpirationWorker(db)
-	ctx := context.Background()
-	go pixWorker.Start(ctx)
+	go pixWorker.Start(context.Background())
 
-	// UseCases
+	// 6. Casos de Uso (Business Logic)
 	createCustomerUC := usecase.NewCreateCustomerUseCase(
 		customerRepo, subRepo, planRepo, gateway, producer, mailSender, kommoAdapter,
 		os.Getenv("SUPABASE_STORAGE_URL"),
@@ -96,38 +171,61 @@ func main() {
 	)
 
 	activateSubUC := usecase.NewActivateSubscriptionUseCase(
-		subRepo, customerRepo, planRepo, producer, mailSender, kommoAdapter,
+		subRepo, customerRepo, planRepo, dependentRepo, producer, mailSender, kommoAdapter,
 	)
+	activateSubUC.ContractUC = usecase.NewGenerateContractUseCase(
+		pdf.NewContractGenerator("internal/infra/storage/plans_templates"),
+		contractStorage,
+	)
+	// Instanciar DocuSeal usecase e registrar no activateSubUC
+	docuSealUseCase := usecase.NewGenerateContractWithDocuSealUseCase(
+		pdf.NewContractGenerator("internal/infra/storage/plans_templates"),
+		docuSealClient,
+	)
+	activateSubUC.DocuSealUseCase = docuSealUseCase
+	log.Println("✅ Gerador de contrato PDF e DocuSeal inicializado")
 
-	// Handlers
-	customerHandler := handlers.NewCustomerHandler(createCustomerUC, subRepo)
+	// 7. Handlers (Controllers HTTP)
+	customerHandler := handlers.NewCustomerHandler(createCustomerUC, subRepo, customerRepo)
 	webhookHandler := handlers.NewWebhookHandler(customerRepo, activateSubUC)
+	docusealWebhookHandler := handlers.NewDocuSealWebhookHandler(docuSealClient, mailSender)
+	docusealTestHandler := handlers.NewDocuSealTestHandler(docuSealClient)
+	docusealStatusHandler := handlers.NewDocuSealStatusHandler(docuSealClient)
 	validationHandler := handlers.NewValidationHandler(customerRepo)
 	leadHandler := handlers.NewLeadHandler(leadRepo)
-	healthHandler := handlers.NewHealthHandler(db, rabbitMQ.Conn)
+	var rabbitMQConn *amqp091.Connection
+	if rabbitMQ != nil {
+		rabbitMQConn = rabbitMQ.Conn
+	}
+	healthHandler := handlers.NewHealthHandler(db, rabbitMQConn)
+	emailHandler := handlers.NewEmailHandler(mailSender)
+	couponHandler := handlers.NewCouponHandler()
 
-	// Router
+	// 8. Roteamento (Chi)
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(httpMiddleware.Metrics)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: []string{"http://localhost:5173", "*"},
-		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-	}))
 
+	// Middlewares globais
+	r.Use(permissiveCORS)
+	r.Use(middleware.Logger)
+	r.Use(chitrace.Middleware())
+	r.Use(httpMiddleware.Metrics)
+
+	// Rotas da API
 	r.Post("/checkout", customerHandler.CreateCheckoutHandler)
+	r.Post("/customers/lookup-cpf", customerHandler.LookupCPFHandler)
 	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler)
+	r.Post("/customers/status", customerHandler.PostStatusHandler)
 	r.Post("/webhook", webhookHandler.Handle)
+	r.Post("/docuseal/webhook", docusealWebhookHandler.Handle)
+	r.Post("/docuseal/test", docusealTestHandler.Handle)
+	r.Post("/docuseal/status", docusealStatusHandler.Handle)
 	r.Post("/validate-user", validationHandler.Handle)
 	r.Post("/leads/capture", leadHandler.CaptureLead)
+	r.Post("/test-email", emailHandler.SendTestWelcomeEmail)
+	r.Post("/coupons/validate", couponHandler.Validate)
 
-	// Observability endpoints
+	// Health Checks
 	r.Get("/health", healthHandler.Handle)
-	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		promhttp.Handler().ServeHTTP(w, r)
-	})
-
-	// Kubernetes health checks
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -144,7 +242,98 @@ func main() {
 		w.Write([]byte(`{"status":"ready"}`))
 	})
 
+	// 9. Start do Servidor
 	port := ":8080"
+	if rawPort := strings.TrimSpace(os.Getenv("PORT")); rawPort != "" {
+		if !strings.HasPrefix(rawPort, ":") {
+			rawPort = ":" + rawPort
+		}
+		port = rawPort
+	}
 	log.Printf("🚀 Server CorePay rodando na porta %s", port)
-	http.ListenAndServe(port, r)
+	if err := http.ListenAndServe(port, r); err != nil {
+		log.Fatalf("❌ Falha fatal no servidor HTTP: %v", err)
+	}
+}
+
+// ==========================================
+// FUNÇÕES DE CONFIGURAÇÃO AUXILIARES
+// ==========================================
+
+// setupDatabase configura a conexão com Postgres usando PGX envolto no Datadog Tracer
+func setupDatabase() *sql.DB {
+	// Registra o driver do PGX no Datadog (substitui o antigo pq.Driver)
+	sqltrace.Register("pgx", &stdlib.Driver{})
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("❌ DATABASE_URL não encontrada no arquivo .env")
+	}
+
+	dbURL = enableSimpleProtocol(dbURL)
+
+	// Abre a conexão passando "pgx"
+	db, err := sqltrace.Open("pgx", dbURL)
+	if err != nil {
+		log.Fatalf("❌ Erro ao inicializar conexão com banco: %v", err)
+	}
+
+	// Força um teste logo na subida da aplicação para evitar erro silencioso de EOF
+	if err := db.Ping(); err != nil {
+		log.Fatalf("❌ Erro ao realizar Ping no banco (Verifique o EOF e se adicionou o ?sslmode=require): %v", err)
+	}
+
+	log.Println("✅ Banco de Dados conectado via PGX/Datadog!")
+	return db
+}
+
+// setupEmailService decide qual provedor de email usar com base nas variáveis de ambiente
+func enableSimpleProtocol(dbURL string) string {
+	if strings.Contains(dbURL, "default_query_exec_mode=") {
+		return dbURL
+	}
+
+	separator := "?"
+	if strings.Contains(dbURL, "?") {
+		separator = "&"
+	}
+
+	return dbURL + separator + "default_query_exec_mode=simple_protocol"
+}
+
+func setupEmailService() usecase.EmailService {
+	useGraphEmail := strings.ToLower(os.Getenv("USE_GRAPH_EMAIL")) == "true"
+
+	if useGraphEmail {
+		clientID := strings.TrimSpace(os.Getenv("AZURE_CLIENT_ID"))
+		clientSecret := strings.TrimSpace(os.Getenv("AZURE_CLIENT_SECRET"))
+		tenantID := strings.TrimSpace(os.Getenv("AZURE_TENANT_ID"))
+
+		if clientID != "" && clientSecret != "" && tenantID != "" {
+			log.Println("📧 Inicializando Microsoft Graph API (OAuth2) para envio de emails")
+			return mail.NewGraphEmailSender(
+				clientID,
+				clientSecret,
+				tenantID,
+				os.Getenv("MAIL_FROM"),
+			)
+		}
+
+		log.Println("⚠️ USE_GRAPH_EMAIL está habilitado, mas as credenciais AZURE_* estão incompletas. Fazendo fallback para SMTP se configurado.")
+	}
+
+	log.Println("📧 Inicializando SMTP Padrão para envio de emails")
+	mailPort := 587
+	if p := os.Getenv("MAIL_PORT"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil {
+			mailPort = parsed
+		}
+	}
+	return mail.NewEmailSenderWithFrom(
+		os.Getenv("MAIL_HOST"),
+		mailPort,
+		os.Getenv("MAIL_USER"),
+		os.Getenv("MAIL_PASS"),
+		os.Getenv("MAIL_FROM"),
+	)
 }

@@ -20,30 +20,35 @@ func (e ValidationError) Error() string {
 func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 	var errors []ValidationError
 
+	fmt.Printf("[validation] Input received:\n")
+	fmt.Printf("  name=%q email=%q cpf=%q phone=%q birth_date=%q\n", input.Name, input.Email, input.CPF, input.Phone, input.BirthDate)
+	fmt.Printf("  street=%q number=%q city=%q state=%q zip=%q\n", input.Street, input.Number, input.City, input.State, input.ZipCode)
+	fmt.Printf("  payment_method=%q plan_id=%q\n", input.PaymentMethod, input.PlanID)
+
 	if strings.TrimSpace(input.Name) == "" {
-		errors = append(errors, ValidationError{"name", "is required"})
+		errors = append(errors, ValidationError{"name", "nome é obrigatório"})
 	} else if len(input.Name) < 3 {
-		errors = append(errors, ValidationError{"name", "must have at least 3 characters"})
+		errors = append(errors, ValidationError{"name", "nome deve ter pelo menos 3 caracteres"})
 	} else if len(input.Name) > 200 {
-		errors = append(errors, ValidationError{"name", "must not exceed 200 characters"})
+		errors = append(errors, ValidationError{"name", "nome não pode exceder 200 caracteres"})
 	}
 
 	if strings.TrimSpace(input.Email) == "" {
-		errors = append(errors, ValidationError{"email", "is required"})
+		errors = append(errors, ValidationError{"email", "email é obrigatório"})
 	} else if _, err := mail.ParseAddress(input.Email); err != nil {
-		errors = append(errors, ValidationError{"email", "is invalid"})
+		errors = append(errors, ValidationError{"email", "email inválido"})
 	}
 
 	if input.CPF == "" {
-		errors = append(errors, ValidationError{"cpf", "is required"})
+		errors = append(errors, ValidationError{"cpf", "CPF é obrigatório"})
 	} else if !isValidCPF(input.CPF) {
-		errors = append(errors, ValidationError{"cpf", "is invalid"})
+		errors = append(errors, ValidationError{"cpf", "CPF inválido"})
 	}
 
 	if strings.TrimSpace(input.Phone) == "" {
-		errors = append(errors, ValidationError{"phone", "is required"})
+		errors = append(errors, ValidationError{"phone", "telefone é obrigatório"})
 	} else if !isValidPhoneNumber(input.Phone) {
-		errors = append(errors, ValidationError{"phone", "must be a valid phone number"})
+		errors = append(errors, ValidationError{"phone", "telefone inválido"})
 	}
 
 	if strings.TrimSpace(input.BirthDate) == "" {
@@ -81,6 +86,11 @@ func ValidateCreateCustomerInput(input CreateCustomerInput) []ValidationError {
 		errors = append(errors, ValidationError{"payment_method", "is required"})
 	} else if input.PaymentMethod != "PIX" && input.PaymentMethod != "CREDIT_CARD" {
 		errors = append(errors, ValidationError{"payment_method", "must be PIX or CREDIT_CARD"})
+	}
+
+	checkoutAction := strings.ToUpper(strings.TrimSpace(input.CheckoutAction))
+	if checkoutAction != "" && checkoutAction != "PAY" && checkoutAction != "RETRY" {
+		errors = append(errors, ValidationError{"checkout_action", "must be PAY or RETRY"})
 	}
 
 	if input.PaymentMethod == "CREDIT_CARD" {

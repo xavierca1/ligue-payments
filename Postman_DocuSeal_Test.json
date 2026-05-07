@@ -1,0 +1,40 @@
+{
+  "info": {
+    "_postman_id": "docuseal-test-collection",
+    "name": "DocuSeal Test",
+    "description": "Testes para geração de documentos assinados com DocuSeal",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "DocuSeal - Gerar Documento",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"cliente@example.com\",\n  \"fields\": {\n    \"product\": \"Saúde em Dia\",\n    \"id\": \"SUB-12345\",\n    \"method_payment\": \"PIX\",\n    \"name\": \"João da Silva\",\n    \"birthdate\": \"1990-05-15\",\n    \"cpf\": \"12345678901\",\n    \"genre\": \"M\",\n    \"marital_status\": \"Solteiro\",\n    \"cellphone\": \"(11) 99999-8888\",\n    \"email\": \"joao@example.com\",\n    \"address\": \"Rua das Flores\",\n    \"number\": \"123\",\n    \"neighborhood\": \"Centro\",\n    \"city\": \"São Paulo\",\n    \"UF\": \"SP\",\n    \"zip_code\": \"01310-100\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/docuseal/test",
+          "host": ["{{base_url}}"],
+          "path": ["docuseal", "test"]
+        },
+        "description": "Cria uma submission no DocuSeal com template 3346712 e retorna a URL de assinatura"
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080",
+      "type": "string"
+    }
+  ]
+}

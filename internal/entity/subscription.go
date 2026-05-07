@@ -26,8 +26,8 @@ type SubscriptionRepository interface {
 	GetStatusByCustomerID(customerID string) (string, error)
 	UpdateStatus(customerID string, status string) error
 	FindLastByCustomerID(ctx context.Context, customerID string) (*Subscription, error)
+	DeleteByID(ctx context.Context, id string) error
 }
-
 
 func NewSubscription(customerID, planID string, amount int) *Subscription {
 	return &Subscription{

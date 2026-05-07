@@ -43,8 +43,10 @@ func TestActivateSubscriptionDoc24Success(t *testing.T) {
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
 	mockPlanRepo := new(MockPlanRepository)
+	mockDependentRepo := new(MockDependentRepository)
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcomeEmail", "João Silva", "joao@example.com").Return(nil)
 	mockKommo := new(MockKommoService)
 	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
 
@@ -81,6 +83,7 @@ func TestActivateSubscriptionDoc24Success(t *testing.T) {
 	}
 
 	mockCustomerRepo.On("FindByID", ctx, "cust-123").Return(customer, nil)
+	mockDependentRepo.On("FindByCustomerID", ctx, "cust-123").Return([]*entity.Dependent{}, nil)
 	mockSubRepo.On("FindLastByCustomerID", ctx, "cust-123").Return(subscription, nil)
 	mockPlanRepo.On("FindByID", ctx, "plan-456").Return(plan, nil)
 	mockSubRepo.On("UpdateStatus", "cust-123", "ACTIVE").Return(nil)
@@ -92,7 +95,7 @@ func TestActivateSubscriptionDoc24Success(t *testing.T) {
 	})).Return(nil)
 
 	uc := usecase.NewActivateSubscriptionUseCase(
-		mockSubRepo, mockCustomerRepo, mockPlanRepo,
+		mockSubRepo, mockCustomerRepo, mockPlanRepo, mockDependentRepo,
 		mockQueue, mockEmailService, mockKommo,
 	)
 
@@ -118,8 +121,10 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 	mockSubRepo := new(MockSubscriptionRepository)
 	mockCustomerRepo := new(MockCustomerRepository)
 	mockPlanRepo := new(MockPlanRepository)
+	mockDependentRepo := new(MockDependentRepository)
 	mockQueue := new(MockQueueProducer)
 	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcomeEmail", "João Silva", "joao@example.com").Return(nil)
 	mockDoc24Client := new(MockDoc24Client)
 	mockKommo := new(MockKommoService)
 	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
@@ -153,6 +158,7 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 	}
 
 	mockCustomerRepo.On("FindByID", ctx, "cust-123").Return(customer, nil)
+	mockDependentRepo.On("FindByCustomerID", ctx, "cust-123").Return([]*entity.Dependent{}, nil)
 	mockSubRepo.On("FindLastByCustomerID", ctx, "cust-123").Return(subscription, nil)
 	mockPlanRepo.On("FindByID", ctx, "plan-456").Return(plan, nil)
 	mockSubRepo.On("UpdateStatus", "cust-123", "ACTIVE").Return(nil)
@@ -167,7 +173,7 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 
 	// 1. Webhook ativa subscription
 	activateUC := usecase.NewActivateSubscriptionUseCase(
-		mockSubRepo, mockCustomerRepo, mockPlanRepo,
+		mockSubRepo, mockCustomerRepo, mockPlanRepo, mockDependentRepo,
 		mockQueue, mockEmailService, mockKommo,
 	)
 
@@ -192,4 +198,65 @@ func TestActivateSubscriptionDoc24EndToEnd(t *testing.T) {
 
 	// 5. Verifica que status foi atualizado
 	mockSubRepo.AssertCalled(t, "UpdateStatus", "cust-123", "ACTIVE")
+}
+
+// TestActivateSubscriptionSendsEmailEvenWhenAlreadyActiveAndQueueFails - garante que o e-mail não depende da fila
+func TestActivateSubscriptionSendsEmailEvenWhenAlreadyActiveAndQueueFails(t *testing.T) {
+	ctx := context.Background()
+
+	mockSubRepo := new(MockSubscriptionRepository)
+	mockCustomerRepo := new(MockCustomerRepository)
+	mockPlanRepo := new(MockPlanRepository)
+	mockDependentRepo := new(MockDependentRepository)
+	mockQueue := new(MockQueueProducer)
+	mockEmailService := new(MockEmailService)
+	mockEmailService.On("SendWelcomeEmail", "João Silva", "joao@example.com").Return(nil)
+	mockKommo := new(MockKommoService)
+	mockKommo.On("CreateLead", mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(0, nil)
+
+	customer := &entity.Customer{
+		ID:        "cust-123",
+		Name:      "João Silva",
+		Email:     "joao@example.com",
+		CPF:       "123.456.789-00",
+		Phone:     "(11) 99999-9999",
+		BirthDate: "1990-05-15",
+		Gender:    1,
+		PlanID:    "plan-456",
+		GatewayID: "asaas-cust-123",
+	}
+
+	subscription := &entity.Subscription{
+		ID:         "sub-123",
+		CustomerID: "cust-123",
+		PlanID:     "plan-456",
+		ProductID:  "prod-456",
+		Status:     "ACTIVE",
+	}
+
+	plan := &entity.Plan{
+		ID:               "plan-456",
+		Name:             "Plano Premium",
+		PriceCents:       29900,
+		Provider:         "DOC24",
+		ProductID:        "prod-456",
+		ProviderPlanCode: "ligue saude em dia individual",
+	}
+
+	mockCustomerRepo.On("FindByID", ctx, "cust-123").Return(customer, nil)
+	mockDependentRepo.On("FindByCustomerID", ctx, "cust-123").Return([]*entity.Dependent{}, nil)
+	mockSubRepo.On("FindLastByCustomerID", ctx, "cust-123").Return(subscription, nil)
+	mockPlanRepo.On("FindByID", ctx, "plan-456").Return(plan, nil)
+	mockQueue.On("PublishActivation", ctx, mock.Anything).Return(context.Canceled)
+
+	uc := usecase.NewActivateSubscriptionUseCase(
+		mockSubRepo, mockCustomerRepo, mockPlanRepo, mockDependentRepo,
+		mockQueue, mockEmailService, mockKommo,
+	)
+
+	err := uc.Execute(ctx, usecase.ActivateSubscriptionInput{CustomerID: "cust-123", GatewayID: "payment-123"})
+
+	assert.NoError(t, err)
+	mockEmailService.AssertCalled(t, "SendWelcomeEmail", "João Silva", "joao@example.com")
+	mockSubRepo.AssertNotCalled(t, "UpdateStatus", mock.Anything, mock.Anything)
 }

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        /* Configuração da página para o conversor de PDF entender o tamanho horizontal */
+        @page {
+            margin: 0;
+            size: 85.6mm 53.98mm; /* Tamanho padrão de cartão internacional */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #ffffff; /* Fundo branco para a página do PDF */
+            /* Flexbox para centralizar caso você abra no navegador para testar */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            -webkit-print-color-adjust: exact; /* Força impressão do background */
+            print-color-adjust: exact;
+        }
+
+        .card-container {
+            /* Dimensões travadas para manter a proporção horizontal */
+            width: 600px;
+            height: 350px;
+            background: linear-gradient(135deg, #3b5bdb 0%, #42D393 100%);
+            border-radius: 20px;
+            padding: 35px;
+            box-sizing: border-box;
+            position: relative;
+            color: #ffffff;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15); /* Sombra suave */
+        }
+
+        /* Efeito de vidro/brilho no fundo da carteirinha */
+        .card-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%);
+            transform: rotate(30deg);
+            pointer-events: none;
+        }
+
+        .logo {
+            position: absolute;
+            top: 35px;
+            right: 35px;
+            max-width: 140px;
+            z-index: 10;
+            /* Filtro opcional: se o logo ficar muito escuro no azul, você pode usar um brilho invertido, 
+               mas como é a marca, deixei puro */
+        }
+
+        .card-header {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            opacity: 0.85;
+            margin-bottom: 50px;
+            font-weight: 600;
+        }
+
+        .client-name {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 0 0 8px 0;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 80%;
+        }
+
+        .plan-name {
+            font-size: 18px;
+            font-weight: 500;
+            opacity: 0.95;
+            margin: 0 0 40px 0;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            position: absolute;
+            bottom: 35px;
+            left: 35px;
+            right: 35px;
+        }
+
+        .info-block {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .info-value {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+        }
+
+        .platform-url {
+            position: absolute;
+            bottom: 12px;
+            width: 100%;
+            text-align: center;
+            left: 0;
+            font-size: 10px;
+            opacity: 0.7;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card-container">
+        <img src="https://yntprscrhdlrwkgnmzrb.supabase.co/storage/v1/object/public/public-assets/logo/logo_branca.png" class="logo" alt="Ligue Medicina">
+        
+        <div class="card-header">Carteirinha Digital</div>
+    
+        <h2 class="client-name">{{ .FullName }}</h2>
+        <h3 class="plan-name">{{ .PlanName }}</h3>
+        
+        <div class="card-footer">
+            <div class="info-block">
+                <span class="info-label">Número da Carteirinha</span>
+                <span class="info-value">{{ .CardNumber }}</span>
+            </div>
+            <div class="info-block" style="text-align: right;">
+                <span class="info-label">Emitido em</span>
+                <span class="info-value">{{ .IssuedAt }}</span>
+            </div>
+        </div>
+
+    </div>
+</body>
+</html>

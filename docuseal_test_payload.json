@@ -1,0 +1,21 @@
+{
+  "email": "cliente@example.com",
+  "fields": {
+    "product": "Saúde em Dia",
+    "id": "SUB-12345",
+    "method_payment": "PIX",
+    "name": "João da Silva",
+    "birthdate": "1990-05-15",
+    "cpf": "12345678901",
+    "genre": "M",
+    "marital_status": "Solteiro",
+    "cellphone": "(11) 99999-8888",
+    "email": "joao@example.com",
+    "address": "Rua das Flores",
+    "number": "123",
+    "neighborhood": "Centro",
+    "city": "São Paulo",
+    "UF": "SP",
+    "zip_code": "01310-100"
+  }
+}

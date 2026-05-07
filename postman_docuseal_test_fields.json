@@ -1,0 +1,23 @@
+{
+  "email": "test@test.com",
+  "template": "ligue_saude_em_dia",
+  "fields": {
+    "product": "Ligue Saúde em Dia",
+    "id": "CUSTOMER_001",
+    "method_payment": "PIX",
+    "periodicidade": "monthly",
+    "name": "João Silva",
+    "birthdate": "15/05/1990",
+    "cpf": "123.456.789-00",
+    "genre": "Masculino",
+    "marital_status": "Solteiro",
+    "cellphone": "(11) 98765-4321",
+    "email": "test@test.com",
+    "address": "Rua das Flores",
+    "number": "123",
+    "neighborhood": "Centro",
+    "city": "São Paulo",
+    "UF": "SP",
+    "zip_code": "01310-100"
+  }
+}

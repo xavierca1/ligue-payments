@@ -37,7 +37,7 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 			$1, 
             $2::uuid,          -- 🆕 Forçamos o UUID aqui
             $3, $4, $5, $6, $7, $8, $9, $10,
-            NULLIF($11, '')::uuid
+			NULLIF($11, '')
 		)
 	`
 
@@ -57,7 +57,7 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 		sub.CreatedAt,       // $8
 		sub.UpdatedAt,       // $9
 		sub.PaymentMethod,   // $10
-		"",                  // $11
+		sub.PaymentMethodID, // $11
 	)
 
 	if err != nil {
@@ -68,10 +68,45 @@ func (r *SubscriptionRepository) Create(ctx context.Context, sub *entity.Subscri
 }
 
 func (r *SubscriptionRepository) UpdateStatus(id string, status string) error {
-
+	// Tentamos atualizar por customer_id (ID local do cliente)
 	query := `UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE customer_id = $2`
-	_, err := r.DB.Exec(query, status, id)
-	return err
+	result, err := r.DB.Exec(query, status, id)
+	if err != nil {
+		fmt.Printf("❌ UpdateStatus: SQL error (customer_id=%s) para status=%s: %v\n", id, status, err)
+		return err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	fmt.Printf("🔄 UpdateStatus (customer_id): customer_id=%s status=%s rows_affected=%d\n", id, status, rowsAffected)
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	// Se nada foi atualizado, talvez o identificador recebido seja o payment_method_id (gateway subscription/payment id)
+	query = `UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE payment_method_id = $2`
+	result, err = r.DB.Exec(query, status, id)
+	if err != nil {
+		fmt.Printf("❌ UpdateStatus: SQL error (payment_method_id=%s) para status=%s: %v\n", id, status, err)
+		return err
+	}
+	rowsAffected, _ = result.RowsAffected()
+	fmt.Printf("🔄 UpdateStatus (payment_method_id): payment_method_id=%s status=%s rows_affected=%d\n", id, status, rowsAffected)
+	if rowsAffected > 0 {
+		return nil
+	}
+
+	// Por fim, tente atualizar pela própria subscription.id
+	query = `UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE id = $2`
+	result, err = r.DB.Exec(query, status, id)
+	if err != nil {
+		fmt.Printf("❌ UpdateStatus: SQL error (id=%s) para status=%s: %v\n", id, status, err)
+		return err
+	}
+	rowsAffected, _ = result.RowsAffected()
+	fmt.Printf("🔄 UpdateStatus (id): id=%s status=%s rows_affected=%d\n", id, status, rowsAffected)
+	if rowsAffected == 0 {
+		fmt.Printf("⚠️ UpdateStatus: nenhuma subscription encontrada para nenhum dos campos com identificador=%s\n", id)
+	}
+	return nil
 }
 
 func (r *SubscriptionRepository) GetStatusByCustomerID(customerID string) (string, error) {
@@ -83,6 +118,16 @@ func (r *SubscriptionRepository) GetStatusByCustomerID(customerID string) (strin
 	}
 	return status, nil
 }
+
+func (r *SubscriptionRepository) DeleteByID(ctx context.Context, id string) error {
+	query := `DELETE FROM subscriptions WHERE id = $1`
+	_, err := r.DB.ExecContext(ctx, query, id)
+	if err != nil {
+		return fmt.Errorf("erro ao deletar subscription %s: %w", id, err)
+	}
+	return nil
+}
+
 func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, customerID string) (*entity.Subscription, error) {
 	query := `
 		SELECT 
@@ -94,7 +139,8 @@ func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, custo
 			status, 
 			next_billing_date, 
 			created_at, 
-			updated_at
+			updated_at,
+			COALESCE(payment_method_id, '')
 		FROM subscriptions 
 		WHERE customer_id = $1 
 		ORDER BY created_at DESC 
@@ -113,6 +159,7 @@ func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, custo
 		&sub.NextBillingDate,
 		&sub.CreatedAt,
 		&sub.UpdatedAt,
+		&sub.PaymentMethodID,
 	)
 
 	if err != nil {

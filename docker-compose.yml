@@ -1,24 +1,36 @@
 version: '3.8'
 
 services:
+  # ==========================================
+  # 🚀 API PRINCIPAL (COREPAY)
+  # ==========================================
   api:
     build: .
     container_name: ligue-api
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
-      - DATABASE_URL=postgresql://admin:password@postgres:5432/ligue_payments?sslmode=disable
+      - RUNNING_IN_DOCKER=true
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_USER=guest
       - RABBITMQ_PASS=guest
       - ASAAS_API_KEY=${ASAAS_API_KEY}
       - ASAAS_URL=https://api.asaas.com/v3
       - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT:-587}
       - MAIL_USER=${MAIL_USER}
       - MAIL_PASS=${MAIL_PASS}
+      - MAIL_FROM=${MAIL_FROM}
+      - DD_AGENT_HOST=datadog-agent
+      - DD_DOGSTATSD_PORT=8125
+      - DD_TRACE_AGENT_URL=http://datadog-agent:8126
+      - DD_SERVICE=ligue-payments
+      - DD_ENV=${DD_ENV:-local}
     depends_on:
-      - postgres
       - rabbitmq
+      - datadog-agent
     networks:
       - ligue-network
     restart: unless-stopped
@@ -29,6 +41,9 @@ services:
       retries: 3
       start_period: 10s
 
+  # ==========================================
+  # 🐘 BANCO DE DADOS (POSTGRES LOCAL)
+  # ==========================================
   postgres:
     image: postgres:15-alpine
     container_name: ligue_postgres
@@ -49,8 +64,13 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # 🐇 MENSAGERIA (RABBITMQ COM MÉTRICAS)
+  # ==========================================
   rabbitmq:
-    image: rabbitmq:3.12-management-alpine
+    build:
+      context: .
+      dockerfile: Dockerfile.rabbitmq
     container_name: ligue-rabbitmq
     restart: always
     environment:
@@ -61,6 +81,7 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+      - "15692:15692"
     networks:
       - ligue-network
     healthcheck:
@@ -69,6 +90,52 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================
+  # 🐶 MONITORAMENTO (DATADOG AGENT)
+  # ==========================================
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    container_name: datadog-agent
+    entrypoint: ["/bin/bash", "/datadog-entrypoint.sh"]
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=us5.datadoghq.com
+      - DD_HOSTNAME=macbook-carlos-local
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_SYSTEM_PROBE_ENABLED=false
+      - DD_NETWORK_PATH_TRACEROUTE_ENABLED=false
+      - DD_NETWORK_DEVICE_MONITORING_ENABLED=false
+      - DD_PROCESS_AGENT_ENABLED=false
+      - DD_PROCESS_DISCOVERY_ENABLED=false
+      - DD_CWS_ENABLED=false
+      - DD_CSPM_ENABLED=false
+      - DD_COMPLIANCE_CONFIG_ENABLED=false
+      - DD_EC2_METADATA_ENABLED=false
+      - DD_GCE_METADATA_ENABLED=false
+      - DD_CLOUD_PROVIDER_METADATA_ENABLED=false
+      - DD_CLOUD_METADATA_AUTH_ENABLED=false
+      - DD_AZURE_METADATA_ENABLED=false
+      - DD_REMOTE_CONFIGURATION_ENABLED=false
+      - DD_WORKLOADMETA_ENABLED=false
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+    ports:
+      - "8126:8126/tcp"
+      - "8125:8125/udp"
+    volumes:
+      - ./datadog-entrypoint.sh:/datadog-entrypoint.sh:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    networks:
+      - ligue-network
+
+# ==========================================
+# 🌐 REDES E VOLUMES GLOBAIS
+# ==========================================
 networks:
   ligue-network:
     driver: bridge

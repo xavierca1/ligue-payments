@@ -6,7 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
+
+	httptrace "github.com/DataDog/dd-trace-go/contrib/net/http/v2"
 )
 
 type Client struct {
@@ -16,10 +21,17 @@ type Client struct {
 }
 
 func NewClient(apiKey, baseURL string) *Client {
+	timeout := 30 * time.Second
+	if rawTimeout := strings.TrimSpace(os.Getenv("ASAAS_HTTP_TIMEOUT_SECONDS")); rawTimeout != "" {
+		if seconds, err := strconv.Atoi(rawTimeout); err == nil && seconds > 0 {
+			timeout = time.Duration(seconds) * time.Second
+		}
+	}
+
 	return &Client{
 		baseURL:    baseURL,
 		apiKey:     apiKey,
-		httpClient: &http.Client{Timeout: 10 * time.Second},
+		httpClient: httptrace.WrapClient(&http.Client{Timeout: timeout}),
 	}
 }
 
@@ -49,7 +61,6 @@ func (c *Client) post(endpoint string, body interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("erro ao ler resposta: %w", err)
 	}
-
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("erro na api asaas (%d): %s", resp.StatusCode, string(respBytes))
@@ -106,6 +117,9 @@ func (c *Client) CreateCustomer(input CreateCustomerInput) (string, error) {
 		return "", fmt.Errorf("erro ao marshal customer: %w", err)
 	}
 
+	fmt.Printf("[asaas] CreateCustomer payload: name=%q email=%q cpf=%q phone=%q mobile=%q zip=%q number=%q\n",
+		payload.Name, payload.Email, payload.CpfCnpj, payload.Phone, payload.MobilePhone, payload.PostalCode, payload.AddressNumber)
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
@@ -120,7 +134,23 @@ func (c *Client) CreateCustomer(input CreateCustomerInput) (string, error) {
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("❌ ERRO CRIAR CLIENTE ASAAS: %s\n", string(body))
+		fmt.Printf("❌ ERRO CRIAR CLIENTE ASAAS (status %d): %s\n", resp.StatusCode, string(body))
+
+		// Tenta parsear a resposta de erro para logar campos específicos
+		var errResp struct {
+			Errors []struct {
+				Code        string `json:"code"`
+				Description string `json:"description"`
+				Field       string `json:"field"`
+			} `json:"errors"`
+		}
+		if err := json.Unmarshal(body, &errResp); err == nil && len(errResp.Errors) > 0 {
+			fmt.Printf("[asaas] Campos com erro:\n")
+			for _, e := range errResp.Errors {
+				fmt.Printf("  - Field: %q | Code: %q | Description: %q\n", e.Field, e.Code, e.Description)
+			}
+		}
+
 		return "", fmt.Errorf("erro criar cliente asaas (status %d)", resp.StatusCode)
 	}
 
@@ -129,6 +159,7 @@ func (c *Client) CreateCustomer(input CreateCustomerInput) (string, error) {
 		return "", fmt.Errorf("erro decode asaas: %w", err)
 	}
 
+	fmt.Printf("[asaas] Cliente criado com sucesso: id=%q\n", response.ID)
 	return response.ID, nil
 }
 
@@ -168,6 +199,9 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 		return "", "", fmt.Errorf("erro ao gerar json: %w", err)
 	}
 
+	fmt.Printf("[asaas] Subscribe payload: customer=%q value=%.2f card_holder=%q phone=%q email=%q\n",
+		input.CustomerID, input.Price, input.CardHolderName, input.HolderPhone, input.HolderEmail)
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", "", err
@@ -182,7 +216,23 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Printf("❌ ERRO API ASAAS (Status %d): %s\n", resp.StatusCode, string(body))
+		fmt.Printf("❌ ERRO API ASAAS Subscribe (Status %d): %s\n", resp.StatusCode, string(body))
+
+		// Tenta parsear a resposta de erro
+		var errResp struct {
+			Errors []struct {
+				Code        string `json:"code"`
+				Description string `json:"description"`
+				Field       string `json:"field"`
+			} `json:"errors"`
+		}
+		if err := json.Unmarshal(body, &errResp); err == nil && len(errResp.Errors) > 0 {
+			fmt.Printf("[asaas] Campos com erro na subscrição:\n")
+			for _, e := range errResp.Errors {
+				fmt.Printf("  - Field: %q | Code: %q | Description: %q\n", e.Field, e.Code, e.Description)
+			}
+		}
+
 		return "", "", fmt.Errorf("api asaas rejeitou (status %d)", resp.StatusCode)
 	}
 
@@ -191,6 +241,7 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 		return "", "", fmt.Errorf("erro ao ler resposta asaas: %w", err)
 	}
 
+	fmt.Printf("[asaas] Subscrição criada com sucesso: id=%q status=%q\n", response.ID, response.Status)
 	return response.ID, response.Status, nil
 }
 
@@ -210,9 +261,13 @@ func (c *Client) SubscribePix(input SubscribePixInput) (string, *PixOutput, erro
 		"dueDate":     expirationDate.Format("2006-01-02"), // Data de expiração
 		"description": "Plano Ligue - Assinatura",
 	}
+
+	fmt.Printf("[asaas] SubscribePix: customer=%q value=%.2f cycle=MONTHLY\n", input.CustomerID, priceFloat)
+
 	respBody, err := c.post("/subscriptions", reqBody)
 	if err != nil {
-		return "", nil, fmt.Errorf("Erro em criar o pix por recorrencia")
+		fmt.Printf("❌ ERRO ao criar PIX por recorrência: %v\n", err)
+		return "", nil, fmt.Errorf("Erro em criar o pix por recorrencia: %w", err)
 	}
 
 	var subResp asaasSubscriptionResponse
@@ -220,39 +275,99 @@ func (c *Client) SubscribePix(input SubscribePixInput) (string, *PixOutput, erro
 		return "", nil, fmt.Errorf("erro json assinatura: %w", err)
 	}
 	subscriptionID := subResp.ID
+
+	var lastErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		pix, err := c.GetPixBySubscriptionID(subscriptionID)
+		if err == nil && pix != nil {
+			return subscriptionID, pix, nil
+		}
+		lastErr = err
+		if attempt < 5 {
+			time.Sleep(600 * time.Millisecond)
+		}
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("não foi possível recuperar o QR Code do PIX")
+	}
+	return subscriptionID, nil, lastErr
+
+}
+
+func (c *Client) GetPixBySubscriptionID(subscriptionID string) (*PixOutput, error) {
+	subscriptionID = strings.TrimSpace(subscriptionID)
+	if subscriptionID == "" {
+		return nil, fmt.Errorf("subscriptionID vazio")
+	}
+
 	pathList := fmt.Sprintf("/subscriptions/%s/payments?limit=1", subscriptionID)
 
 	paymentsBody, err := c.get(pathList)
 	if err != nil {
-		return subscriptionID, nil, fmt.Errorf("erro ao listar pagamentos: %w", err)
+		return nil, fmt.Errorf("erro ao listar pagamentos: %w", err)
 	}
 
 	var listResp asaasListPaymentsResponse
 	if err := json.Unmarshal(paymentsBody, &listResp); err != nil {
-		return subscriptionID, nil, fmt.Errorf("erro json lista: %w", err)
+		return nil, fmt.Errorf("erro json lista: %w", err)
 	}
 
 	if len(listResp.Data) == 0 {
-		return subscriptionID, nil, fmt.Errorf("nenhuma cobrança gerada")
+		return nil, fmt.Errorf("nenhuma cobrança gerada")
 	}
-	paymentID := listResp.Data[0].ID
+
+	paymentID := strings.TrimSpace(listResp.Data[0].ID)
+	if paymentID == "" {
+		return nil, fmt.Errorf("pagamento inválido para assinatura")
+	}
 
 	pathQr := fmt.Sprintf("/payments/%s/pixQrCode", paymentID)
-
 	qrBody, err := c.get(pathQr)
 	if err != nil {
-		return subscriptionID, nil, fmt.Errorf("erro ao pegar qrcode: %w", err)
-	}
-	var qrResp asaasQrCodeResponse
-	if err := json.Unmarshal(qrBody, &qrResp); err != nil {
-		return subscriptionID, nil, fmt.Errorf("erro json qrcode: %w", err)
+		return nil, fmt.Errorf("erro ao pegar qrcode: %w", err)
 	}
 
-	return subscriptionID, &PixOutput{
+	var qrResp asaasQrCodeResponse
+	if err := json.Unmarshal(qrBody, &qrResp); err != nil {
+		return nil, fmt.Errorf("erro json qrcode: %w", err)
+	}
+
+	fmt.Printf("[asaas] PIX qrCode payload: subscription=%q payment=%q code_len=%d qr_len=%d\n",
+		subscriptionID, paymentID, len(strings.TrimSpace(qrResp.Payload)), len(strings.TrimSpace(qrResp.EncodedImage)))
+
+	return &PixOutput{
 		CopyPaste: qrResp.Payload,
 		URL:       qrResp.EncodedImage,
 	}, nil
+}
 
+func (c *Client) DeleteSubscription(subscriptionID string) error {
+	subscriptionID = strings.TrimSpace(subscriptionID)
+	if subscriptionID == "" {
+		return fmt.Errorf("subscriptionID vazio")
+	}
+
+	url := fmt.Sprintf("%s/subscriptions/%s", c.baseURL, subscriptionID)
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("erro ao criar request de delete: %w", err)
+	}
+	c.setHeaders(req)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("erro de conexão ao deletar assinatura: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("erro ao deletar assinatura asaas (%d): %s", resp.StatusCode, string(body))
+	}
+
+	fmt.Printf("[asaas] Assinatura deletada: id=%q\n", subscriptionID)
+	return nil
 }
 
 func (c *Client) setHeaders(req *http.Request) {

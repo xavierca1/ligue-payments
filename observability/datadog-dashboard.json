@@ -1,0 +1,266 @@
+{
+  "title": "Payment Hub - SRE Datadog Dashboard",
+  "description": "Observabilidade de requisições web, filas e integrações do Payment Hub via DogStatsD.",
+  "layout_type": "ordered",
+  "notify_list": [],
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "default": "local"
+    },
+    {
+      "name": "service",
+      "prefix": "service",
+      "default": "ligue-payments"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "group",
+        "title": "API Web Health",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Volume de requests no checkout",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "sum:ligue_payments.http.requests{env:$env,service:$service,path:/checkout}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Requests 4xx vs 5xx no checkout",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "sum:ligue_payments.http.requests{env:$env,service:$service,path:/checkout,status:4*}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "orange",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                },
+                {
+                  "q": "sum:ligue_payments.http.requests{env:$env,service:$service,path:/checkout,status:5*}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "red",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Latência do checkout (p95 e p99)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "p95:ligue_payments.http.request_duration{env:$env,service:$service,path:/checkout}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "blue",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                },
+                {
+                  "q": "p99:ligue_payments.http.request_duration{env:$env,service:$service,path:/checkout}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "purple",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Conexões ativas na API",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "avg:ligue_payments.http.active_connections{env:$env,service:$service}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "green",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "Fila & Processamento",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Mensagens publicadas vs consumidas",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "sum:ligue_payments.queue.messages_published{env:$env,service:$service}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "dog_classic",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                },
+                {
+                  "q": "sum:ligue_payments.queue.messages_consumed{env:$env,service:$service,status:success}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "green",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                },
+                {
+                  "q": "sum:ligue_payments.queue.messages_consumed{env:$env,service:$service,status:failed}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "red",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Profundidade da fila",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "avg:ligue_payments.queue.size{env:$env,service:$service}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "orange",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Tempo de processamento da fila (p95)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "p95:ligue_payments.queue.processing_duration{env:$env,service:$service}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "blue",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Latência de chegada na fila (p95)",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "p95:ligue_payments.queue.message_arrival_latency{env:$env,service:$service}",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "purple",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "Integrações",
+        "layout_type": "ordered",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Erros de integração",
+              "title_size": "16",
+              "title_align": "left",
+              "show_legend": true,
+              "requests": [
+                {
+                  "q": "sum:ligue_payments.integration.errors{env:$env,service:$service}.as_count()",
+                  "display_type": "line",
+                  "style": {
+                    "palette": "red",
+                    "line_type": "solid",
+                    "line_width": "normal"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

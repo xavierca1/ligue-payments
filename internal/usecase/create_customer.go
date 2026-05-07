@@ -3,13 +3,27 @@ package usecase
 import (
 	"context"
 	"fmt"
-	"strconv"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/xavierca1/ligue-payments/internal/entity"
 	"github.com/xavierca1/ligue-payments/internal/infra/integration/asaas"
 )
+
+func parseDependentGender(value string) (int, error) {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "1", "M", "MASCULINO":
+		return 1, nil
+	case "2", "F", "FEMININO":
+		return 2, nil
+	case "3", "O", "OUTRO", "OTHER":
+		return 3, nil
+	default:
+		return 0, fmt.Errorf("gênero do dependente inválido: %s", value)
+	}
+}
 
 func NewCreateCustomerUseCase(
 	repo CustomerRepositoryInterface,
@@ -37,9 +51,9 @@ func NewCreateCustomerUseCase(
 
 func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustomerInput) (*CreateCustomerOutput, error) {
 
+	// 1. Validação de Input
 	validationErrors := ValidateCreateCustomerInput(input)
 	if len(validationErrors) > 0 {
-
 		errMsg := "validation failed: "
 		for _, e := range validationErrors {
 			errMsg += e.Field + " (" + e.Message + "), "
@@ -50,6 +64,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
+	// 2. Busca e Validação do Plano
 	plan, err := uc.PlanRepo.FindByID(ctx, input.PlanID)
 	if err != nil {
 		return nil, &DomainError{
@@ -58,70 +73,211 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 	}
 
-	customerID := uuid.New().String()
+	// 3. Lógica de Valores e Cupons
+	originalAmountCents := plan.PriceCents
+	finalAmountCents := originalAmountCents
+	discountPercent := 0
+	discountAmountCents := 0
+	couponCode := strings.ToUpper(strings.TrimSpace(input.CouponCode))
 
-	genderInt, _ := strconv.Atoi(input.Gender)
-	if genderInt <= 0 || genderInt > 3 {
-		genderInt = 1 // Fallback seguro
+	if couponCode != "" {
+		if couponTracker == nil {
+			return nil, &DomainError{
+				Code:    "COUPON_UNAVAILABLE",
+				Message: "cupom informado, mas o serviço de cupom não está configurado",
+			}
+		}
+		couponDetails, couponErr := couponTracker.GetActiveCoupon(ctx, couponCode)
+		if couponErr != nil {
+			return nil, &DomainError{
+				Code:    "COUPON_INVALID",
+				Message: "cupom inválido ou inativo",
+			}
+		}
+
+		discountPercent = couponDetails.DiscountPercent
+		if discountPercent <= 0 {
+			discountPercent = 10
+		}
+
+		discountAmountCents = (originalAmountCents * discountPercent) / 100
+		finalAmountCents = originalAmountCents - discountAmountCents
+		if finalAmountCents < 0 {
+			finalAmountCents = 0
+		}
 	}
 
-	address := entity.Address{
-		Street:     input.Street,
-		Number:     input.Number,
-		Complement: input.Complement,
-		District:   input.District,
-		City:       input.City,
-		State:      input.State,
-		ZipCode:    input.ZipCode,
+	// 4. Busca de Cliente e Assinatura Existente
+	existingCustomer, _ := uc.Repo.FindByCPF(ctx, input.CPF)
+	if existingCustomer == nil {
+		existingCustomer, _ = uc.Repo.FindByEmailAndProductID(ctx, input.Email, plan.ProductID)
 	}
 
-	customer := &entity.Customer{
-		ID:        customerID,
-		Name:      input.Name,
-		Email:     input.Email,
-		CPF:       input.CPF,
-		Phone:     input.Phone,
-		PlanID:    input.PlanID,
-		ProductID: plan.ProductID,
-		BirthDate: input.BirthDate,
-		Gender:    genderInt,
-		Address:   address,
-
-		TermsAccepted:   input.TermsAccepted,
-		TermsAcceptedAt: parseDateOrNow(input.TermsAcceptedAt),
-		TermsVersion:    input.TermsVersion,
-
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
+	var latestSubscription *entity.Subscription
+	if existingCustomer != nil {
+		latestSubscription, _ = uc.SubRepo.FindLastByCustomerID(ctx, existingCustomer.ID)
 	}
 
-	asaasID, err := uc.Gateway.CreateCustomer(asaas.CreateCustomerInput{
-		Name:              input.Name,
-		Email:             input.Email,
-		CpfCnpj:           input.CPF,
-		Phone:             input.Phone,
-		PostalCode:        input.ZipCode,
-		AddressNumber:     input.Number,
-		ExternalReference: customerID, // <--- O ID do nosso banco vai pro Asaas aqui
-	})
-	if err != nil {
-		return nil, fmt.Errorf("Asaas recusou o cliente: %w", err)
+	// 5. Máquina de Estados: Resolução de Status (ACTIVE vs PENDING)
+	if existingCustomer != nil {
+		existingStatus := strings.ToUpper(strings.TrimSpace(existingCustomer.Status))
+
+		if latestSubscription != nil {
+			existingStatus = strings.ToUpper(strings.TrimSpace(latestSubscription.Status))
+		}
+
+		if existingStatus == "" {
+			if subStatus, subErr := uc.SubRepo.GetStatusByCustomerID(existingCustomer.ID); subErr == nil {
+				existingStatus = strings.ToUpper(strings.TrimSpace(subStatus))
+			}
+		}
+
+		if existingStatus == "" {
+			existingStatus = "PENDING"
+		}
+
+		if existingStatus == "PENDING" {
+			// Cancela a assinatura anterior no Asaas antes de reprocessar
+			subIDToCancel := ""
+			if latestSubscription != nil && strings.TrimSpace(latestSubscription.PaymentMethodID) != "" {
+				subIDToCancel = latestSubscription.PaymentMethodID
+			} else if strings.TrimSpace(existingCustomer.SubscriptionID) != "" {
+				subIDToCancel = existingCustomer.SubscriptionID
+			}
+
+			if subIDToCancel != "" {
+				if cancelErr := uc.Gateway.DeleteSubscription(subIDToCancel); cancelErr != nil {
+					log.Printf("[WARN] falha ao cancelar assinatura Asaas %s: %v", subIDToCancel, cancelErr)
+				}
+			}
+
+			if latestSubscription != nil {
+				if deleteErr := uc.SubRepo.DeleteByID(ctx, latestSubscription.ID); deleteErr != nil {
+					log.Printf("[WARN] falha ao deletar subscription %s: %v", latestSubscription.ID, deleteErr)
+				}
+			}
+			if deleteErr := uc.Repo.Delete(ctx, existingCustomer.ID); deleteErr != nil {
+				log.Printf("[WARN] falha ao deletar customer %s: %v", existingCustomer.ID, deleteErr)
+			}
+
+			existingCustomer = nil
+			latestSubscription = nil
+		}
 	}
-	customer.GatewayID = asaasID
 
-	var pixData *asaas.PixOutput
-	var status string = "WAITING_PAYMENT"
-	var asaasSubID string // <--- Precisamos capturar o ID da assinatura do Asaas
+	// 6. CRIAÇÃO DO NOVO CLIENTE (Se não existir)
+	newCustomerCreated := false
+	if existingCustomer == nil {
+		// Converter Gender de string para int
+		genderInt, genderErr := parseDependentGender(input.Gender)
+		if genderErr != nil {
+			return nil, &DomainError{Code: "VALIDATION_ERROR", Message: genderErr.Error()}
+		}
 
-	if input.PaymentMethod == "PIX" {
-		asaasSubID, pixData, err = uc.Gateway.SubscribePix(asaas.SubscribePixInput{
-			CustomerID: asaasID,
-			Price:      int64(plan.PriceCents),
+		existingCustomer = &entity.Customer{
+			ID:        uuid.New().String(),
+			Name:      input.Name,
+			Email:     input.Email,
+			CPF:       input.CPF,
+			Phone:     input.Phone,
+			BirthDate: input.BirthDate,
+			Gender:    genderInt,
+			Status:    "PENDING",
+			ProductID: plan.ProductID,
+			PlanID:    plan.ID,
+			Address: entity.Address{
+				Street:     input.Street,
+				Number:     input.Number,
+				Complement: input.Complement,
+				District:   input.District,
+				City:       input.City,
+				State:      input.State,
+				ZipCode:    input.ZipCode,
+			},
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+		newCustomerCreated = true
+
+		log.Printf("[DEBUG] ID do cliente sendo enviado para o banco: '%s'", existingCustomer.ID)
+		if err := uc.Repo.Create(ctx, existingCustomer); err != nil {
+			log.Printf("[ERROR] Failed to create customer: %v", err)
+			return nil, &TechnicalError{Code: "DATABASE_ERROR", Message: "Falha ao criar cliente"}
+		}
+	}
+
+	if uc.DependentRepo != nil && len(input.Dependents) > 0 {
+		for _, dependentInput := range input.Dependents {
+			gender, genderErr := parseDependentGender(dependentInput.Gender)
+			if genderErr != nil {
+				if newCustomerCreated {
+					if deleteErr := uc.Repo.Delete(ctx, existingCustomer.ID); deleteErr != nil {
+						log.Printf("[WARN] rollback delete customer failed after dependent validation: %v", deleteErr)
+					}
+				}
+				return nil, &DomainError{Code: "VALIDATION_ERROR", Message: genderErr.Error()}
+			}
+
+			dependent, dependentErr := entity.NewDependent(existingCustomer.ID, existingCustomer.CPF, dependentInput.Name, dependentInput.CPF, dependentInput.BirthDate, gender, dependentInput.Kinship)
+			if dependentErr != nil {
+				if newCustomerCreated {
+					if deleteErr := uc.Repo.Delete(ctx, existingCustomer.ID); deleteErr != nil {
+						log.Printf("[WARN] rollback delete customer failed after dependent creation error: %v", deleteErr)
+					}
+				}
+				return nil, &DomainError{Code: "VALIDATION_ERROR", Message: dependentErr.Error()}
+			}
+
+			if err := uc.DependentRepo.Create(ctx, dependent); err != nil {
+				if newCustomerCreated {
+					if deleteErr := uc.Repo.Delete(ctx, existingCustomer.ID); deleteErr != nil {
+						log.Printf("[WARN] rollback delete customer failed after dependent persist error: %v", deleteErr)
+					}
+				}
+				return nil, &TechnicalError{Code: "DATABASE_ERROR", Message: fmt.Sprintf("Falha ao criar dependente %s", dependent.Name)}
+			}
+		}
+	}
+
+	asaasCustomerID := strings.TrimSpace(existingCustomer.GatewayID)
+	if asaasCustomerID == "" {
+		createdGatewayID, gatewayErr := uc.Gateway.CreateCustomer(asaas.CreateCustomerInput{
+			Name:              input.Name,
+			Email:             input.Email,
+			CpfCnpj:           input.CPF,
+			Phone:             input.Phone,
+			PostalCode:        input.ZipCode,
+			AddressNumber:     input.Number,
+			ExternalReference: existingCustomer.ID,
 		})
-	} else {
-		asaasSubID, _, err = uc.Gateway.Subscribe(asaas.SubscribeInput{
-			CustomerID:       asaasID,
-			Price:            float64(plan.PriceCents) / 100.0,
+		if gatewayErr != nil {
+			return nil, &TechnicalError{Code: "GATEWAY_ERROR", Message: "Falha ao criar customer no gateway: " + gatewayErr.Error()}
+		}
+		asaasCustomerID = createdGatewayID
+		existingCustomer.GatewayID = asaasCustomerID
+		// Salvar o gateway_id no banco para que o webhook consiga encontrar o cliente depois
+		if updateErr := uc.Repo.UpdateGatewayID(ctx, existingCustomer.ID, asaasCustomerID); updateErr != nil {
+			log.Printf("[WARN] Falha ao atualizar gateway_id no banco: %v", updateErr)
+			// Não bloqueamos - o webhook pode tentar encontrar de outras formas
+		}
+	}
+
+	paymentMethod := strings.ToUpper(strings.TrimSpace(input.PaymentMethod))
+	var gatewaySubscriptionID string
+	var pixData *asaas.PixOutput
+	var gatewayStatus string
+	var gatewayErr error
+
+	if paymentMethod == "PIX" {
+		gatewaySubscriptionID, pixData, gatewayErr = uc.Gateway.SubscribePix(asaas.SubscribePixInput{
+			CustomerID: asaasCustomerID,
+			Price:      int64(finalAmountCents),
+		})
+		gatewayStatus = "PENDING"
+	} else if paymentMethod == "CREDIT_CARD" {
+		gatewaySubscriptionID, gatewayStatus, gatewayErr = uc.Gateway.Subscribe(asaas.SubscribeInput{
+			CustomerID:       asaasCustomerID,
+			Price:            float64(finalAmountCents) / 100.0,
 			CardNumber:       input.CardNumber,
 			CardHolderName:   input.CardHolder,
 			CardMonth:        input.CardMonth,
@@ -133,102 +289,60 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 			HolderAddressNum: input.Number,
 			HolderPhone:      input.Phone,
 		})
+	} else {
+		return nil, &DomainError{Code: "UNSUPPORTED_PAYMENT", Message: "Método não suportado"}
 	}
 
-	if err != nil {
-
-		return nil, &DomainError{
-			Code:    "PAYMENT_FAILED",
-			Message: "Asaas recusou o pagamento: " + err.Error(),
-		}
+	if gatewayErr != nil {
+		return nil, &DomainError{Code: "PAYMENT_FAILED", Message: "Asaas recusou o pagamento: " + gatewayErr.Error()}
 	}
 
-	customer.SubscriptionID = asaasSubID
+	existingCustomer.SubscriptionID = gatewaySubscriptionID
+	if paymentMethod == "CREDIT_CARD" {
+		existingCustomer.Status = strings.ToUpper(strings.TrimSpace(gatewayStatus))
+	}
 
-	subscription := &entity.Subscription{
+	newSubscription := &entity.Subscription{
 		ID:              uuid.New().String(),
-		CustomerID:      customer.ID,
+		CustomerID:      existingCustomer.ID,
 		PlanID:          plan.ID,
-		ProductID:       plan.ProductID, // Não esqueça desse cara
-		Amount:          plan.PriceCents,
-		Status:          "PENDING",
-		PaymentMethod:   input.PaymentMethod, // PIX, CREDIT_CARD
-		NextBillingDate: time.Now().AddDate(0, 1, 0),
+		ProductID:       plan.ProductID,
+		Amount:          finalAmountCents,
+		Status:          gatewayStatus,
+		PaymentMethod:   paymentMethod,
+		PaymentMethodID: gatewaySubscriptionID,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
 	}
 
-	txn := NewTransaction()
-
-	txn.AddOperation("create_customer", func(ctx context.Context) error {
-		return uc.Repo.Create(ctx, customer)
-	})
-
-	txn.AddCompensation("delete_customer", func(ctx context.Context) error {
-		return uc.Repo.Delete(ctx, customer.ID)
-	})
-
-	txn.AddOperation("create_subscription", func(ctx context.Context) error {
-		return uc.SubRepo.Create(ctx, subscription)
-	})
-
-	// Salvar dependentes (se houver)
-	if len(input.Dependents) > 0 {
-		txn.AddOperation("create_dependents", func(ctx context.Context) error {
-			for _, depInput := range input.Dependents {
-				genderInt, err := strconv.Atoi(depInput.Gender)
-				if err != nil || genderInt < 1 || genderInt > 3 {
-					genderInt = 1 // Default
-				}
-
-				dependent, err := entity.NewDependent(
-					customer.ID,
-					depInput.Name,
-					depInput.CPF,
-					depInput.BirthDate,
-					genderInt,
-					depInput.Kinship,
-				)
-				if err != nil {
-					return fmt.Errorf("erro ao criar dependente %s: %w", depInput.Name, err)
-				}
-
-				if err := uc.DependentRepo.Create(ctx, dependent); err != nil {
-					return fmt.Errorf("erro ao salvar dependente %s: %w", depInput.Name, err)
-				}
+	if err := uc.SubRepo.Create(ctx, newSubscription); err != nil {
+		log.Printf("[ERROR] Failed to create subscription: %v", err)
+		if newCustomerCreated {
+			if deleteErr := uc.Repo.Delete(ctx, existingCustomer.ID); deleteErr != nil {
+				log.Printf("[WARN] rollback delete customer failed: %v", deleteErr)
 			}
-			return nil
-		})
-	}
-
-	if err := txn.Execute(ctx); err != nil {
-		return nil, &TechnicalError{
-			Code:    "DATABASE_ERROR",
-			Message: "failed to persist customer and subscription: " + err.Error(),
 		}
+		return nil, &TechnicalError{Code: "DATABASE_ERROR", Message: "Falha ao criar assinatura"}
 	}
 
-	// Notificações movidas para activate_subscription (após pagamento confirmado)
+	if paymentMethod == "PIX" {
+		if pixData == nil {
+			return nil, &DomainError{Code: "PAYMENT_FAILED", Message: "Asaas não retornou o QR Code do PIX"}
+		}
+		log.Printf("[checkout] pix_ready customer_id=%s sub_id=%s code_len=%d qr_len=%d", existingCustomer.ID, gatewaySubscriptionID, len(strings.TrimSpace(pixData.CopyPaste)), len(strings.TrimSpace(pixData.URL)))
 
-	var pixCode, pixUrl string
-	if pixData != nil {
-		pixCode = pixData.CopyPaste
-		pixUrl = pixData.URL
+		return &CreateCustomerOutput{
+			ID:           existingCustomer.ID,
+			Status:       "WAITING_PAYMENT",
+			PixCode:      pixData.CopyPaste,
+			PixQRCodeURL: pixData.URL,
+			Msg:          "Cobrança gerada com sucesso!",
+		}, nil
 	}
 
 	return &CreateCustomerOutput{
-		ID:           customer.ID,
-		Status:       status,
-		PixCode:      pixCode,
-		PixQRCodeURL: pixUrl,
-		Msg:          "Pré-cadastro realizado com sucesso!",
+		ID:     existingCustomer.ID,
+		Status: strings.ToUpper(strings.TrimSpace(gatewayStatus)),
+		Msg:    "Pagamento processado com sucesso!",
 	}, nil
-}
-
-func parseDateOrNow(dateStr string) time.Time {
-	t, err := time.Parse(time.RFC3339, dateStr)
-	if err != nil {
-		return time.Now()
-	}
-	return t
 }

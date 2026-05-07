@@ -87,9 +87,12 @@ type CustomerRepositoryInterface interface {
 	Create(ctx context.Context, customer *Customer) error
 	FindByGatewayID(id string) (*Customer, error)
 	FindByID(ctx context.Context, id string) (*Customer, error)
+	FindByCPF(ctx context.Context, cpf string) (*Customer, error)
 	CheckDuplicity(ctx context.Context, email, cpf string) (bool, error)
 	Delete(ctx context.Context, id string) error
 	UpdateProviderID(ctx context.Context, customerID, providerID string) error
+	UpdateGatewayID(ctx context.Context, customerID, gatewayID string) error
+	UpdateStatus(ctx context.Context, customerID, status string) error
 }
 type PlanRepositoryInterface interface {
 	FindByID(ctx context.Context, id string) (*Plan, error)

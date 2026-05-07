@@ -3,6 +3,7 @@ package entity
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -10,21 +11,25 @@ import (
 
 // Dependent representa um dependente vinculado a um cliente titular
 type Dependent struct {
-	ID         string    `json:"id"`
-	CustomerID string    `json:"customer_id"`
-	Name       string    `json:"name"`
-	CPF        string    `json:"cpf"`
-	BirthDate  string    `json:"birth_date"` // Formato: YYYY-MM-DD
-	Gender     int       `json:"gender"`     // 1=Masculino, 2=Feminino, 3=Outro
-	Kinship    string    `json:"kinship"`    // FILHO, CONJUGE, PAI, MAE, etc
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID                  string    `json:"id"`
+	CustomerID          string    `json:"customer_id"`
+	NroDocumentoTitular string    `json:"nro_documento_titular"`
+	Name                string    `json:"name"`
+	CPF                 string    `json:"cpf"`
+	BirthDate           string    `json:"birth_date"` // Formato: YYYY-MM-DD
+	Gender              int       `json:"gender"`     // 1=Masculino, 2=Feminino, 3=Outro
+	Kinship             string    `json:"kinship"`    // FILHO, CONJUGE, PAI, MAE, etc
+	CreatedAt           time.Time `json:"created_at"`
+	UpdatedAt           time.Time `json:"updated_at"`
 }
 
 // NewDependent cria um novo dependente com validações básicas
-func NewDependent(customerID, name, cpf, birthDate string, gender int, kinship string) (*Dependent, error) {
+func NewDependent(customerID, nroDocumentoTitular, name, cpf, birthDate string, gender int, kinship string) (*Dependent, error) {
 	if customerID == "" {
 		return nil, errors.New("customer_id é obrigatório")
+	}
+	if strings.TrimSpace(nroDocumentoTitular) == "" {
+		return nil, errors.New("nro_documento_titular é obrigatório")
 	}
 	if name == "" {
 		return nil, errors.New("name é obrigatório")
@@ -43,15 +48,16 @@ func NewDependent(customerID, name, cpf, birthDate string, gender int, kinship s
 	}
 
 	return &Dependent{
-		ID:         uuid.New().String(),
-		CustomerID: customerID,
-		Name:       name,
-		CPF:        cpf,
-		BirthDate:  birthDate,
-		Gender:     gender,
-		Kinship:    kinship,
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
+		ID:                  uuid.New().String(),
+		CustomerID:          customerID,
+		NroDocumentoTitular: nroDocumentoTitular,
+		Name:                name,
+		CPF:                 cpf,
+		BirthDate:           birthDate,
+		Gender:              gender,
+		Kinship:             kinship,
+		CreatedAt:           time.Now(),
+		UpdatedAt:           time.Now(),
 	}, nil
 }
 

@@ -3,74 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bem-vindo à Ligue!</title>
+    <title>Sua assinatura está ativa</title>
     <style>
-        /* CSS de Reset e fontes básicas */
-        body { margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        
-        /* O hover só funciona em alguns clientes web, então mantemos aqui */
-        .btn:hover { background-color: #3FC69D !important; }
+        /* Responsividade para telas menores (celulares) */
+        @media screen and (max-width: 600px) {
+            .btn-table {
+                width: 100% !important;
+            }
+            .btn-td {
+                display: block !important;
+                width: 100% !important;
+                padding: 0 0 12px 0 !important;
+            }
+            .btn-td a {
+                box-sizing: border-box;
+                width: 100% !important;
+            }
+        }
     </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-    
-    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="table-layout: fixed; background-color: #f4f4f4;">
+<body style="margin:0; padding:0; background-color:#f4f5f8; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#4b5563;">
+    <table role="presentation" border="0" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f8; margin: 0;">
         <tr>
-            <td align="center" style="padding: 20px 0;">
+            <td align="center" style="padding: 0;">
                 
-                <table border="0" cellpadding="0" cellspacing="0" width="600" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 600px;">
-                    
+                <table role="presentation" border="0" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; background-color:#ffffff; border-radius: 0 0 20px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.02);">
                     <tr>
-                        <td align="center" style="background-color: #3FC69D; padding: 30px 20px;">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Bem-vindo ao Ligue Medicina! </h1>
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <td style="padding: 40px 30px; color: #333333; line-height: 1.6;">
-                            
-                            <div style="font-size: 20px; font-weight: bold; color: #3289CA; margin-bottom: 20px;">
-                                Olá, {{.Name}}!
-                            </div>
-
-                            <p style="margin-bottom: 20px;">
-                                Estamos muito felizes em ter você conosco! Seu cadastro foi confirmado e sua assinatura do plano <strong>{{.ProductName}}</strong> já está ativa.
-                            </p>
-
-                            <div style="background-color: #e9f5ff; border-left: 4px solid #3289CA; padding: 15px; margin: 20px 0; border-radius: 4px;">
-                                <p style="margin: 0;"><strong>O que acontece agora?</strong><br>
-                                Você já pode começar a utilizar os benefícios da nossa rede credenciada e descontos exclusivos.</p>
-                            </div>
-
-                            <p style="margin-bottom: 20px;">
-                                Preparamos um <strong>Kit de Boas-Vindas</strong> digital para você. Nele você encontra sua carteirinha provisória e o manual de uso.
-                            </p>
-
-                            <div style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-                                <a href="{{.PDFLink}}" target="_blank" class="btn" style="background-color: #42D393; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 50px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(40, 167, 69, 0.3);">
-                                    📥 Baixar Meu Kit de Boas-Vindas
-                                </a>
-                            </div>
-
-                            <p style="margin-bottom: 10px;">
-                                Se tiver qualquer dúvida ou precisar de ajuda, basta responder a este e-mail ou entrar em contato pelo nosso WhatsApp.
-                            </p>
-                            
-                            <p style="margin-top: 30px;">
-                                Um abraço,<br>
-                                <strong>Equipe Ligue & Grupo Cuidarte</strong>
-                            </p>
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <td align="center" style="background-color: #eeeeee; padding: 20px; font-size: 12px; color: #777777; border-top: 1px solid #dddddd;">
-                            <p style="margin: 5px 0;">Este é um e-mail automático, por favor não responda diretamente se não for necessário.</p>
-                            <p style="margin: 5px 0;">&copy; 2026 Grupo Cuidarte. Todos os direitos reservados.</p>
+                        <td align="center" style="padding: 25px 20px;">
+                            <img src="https://yntprscrhdlrwkgnmzrb.supabase.co/storage/v1/object/public/public-assets/logo/logo.png" alt="Ligue Medicina" width="160" style="display:block; max-width:100%; height:auto; outline:none; text-decoration:none; border:none;">
                         </td>
                     </tr>
                 </table>
 
+                <table role="presentation" border="0" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
+                    <tr>
+                        <td style="padding: 30px 20px 40px 20px; text-align: left; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                            
+                            <p style="margin:0 0 25px 0; font-size:20px; font-weight:700; color:#2D57E7; text-align:center;">
+                                🎉 Seja bem-vindo(a) à Ligue Medicina!
+                            </p>
+
+                            <p style="margin:0 0 15px 0; font-size:18px; color:#374151;">
+                                Olá, {{.FirstName}}! 🤍
+                            </p>
+
+                            <p style="margin:0 0 15px 0;">
+                                Seu pagamento foi confirmado e o seu acesso já está liberado. Agora você conta com um cuidado mais completo, prático e sem complicação sempre que precisar.
+                            </p>
+
+                            <p style="margin:0 0 25px 0;">
+                                Sua <strong>carteirinha digital</strong> está logo abaixo para facilitar o acesso. Para realizar uma consulta ou acessar informações do seu plano é só clicar nos botões abaixo.
+                            </p>
+
+                            <table class="btn-table" role="presentation" border="0" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 25px 0;">
+                                <tr>
+                                    <td class="btn-td" width="48%" align="center" valign="top" style="padding-right: 2%;">
+                                        <a href="https://liguemedicina.videoconsultas.app/paciente/autogestion" target="_blank" style="display:block; padding:12px 10px; background-color:#42D393; color:#ffffff; text-decoration:none; font-weight:600; font-size:15px; border-radius:4px; text-align:center;">
+                                            Acesse nosso Portal
+                                        </a>
+                                    </td>
+                                    <td class="btn-td" width="50%" align="center" valign="top">
+                                        <a href="https://www.liguemedicina.com.br/boasvidasdoc" target="_blank" style="display:block; padding:12px 10px; background-color:#2D57E7; color:#ffffff; text-decoration:none; font-weight:600; font-size:15px; border-radius:4px; text-align:center;">
+                                            Saiba mais sobre o plano
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:0 0 15px 0;">
+                                Para utilizar suas consultas é simples: acesse o portal, preencha seus dados e em poucos passos poderá falar com um profissional.
+                            </p>
+
+                            <p style="margin:0 0 25px 0;">
+                                Se tiver alguma dúvida ou precisar de ajuda, é só falar com a gente pelo WhatsApp.
+                            </p>
+
+                            <table role="presentation" border="0" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 30px 0;">
+                                <tr>
+                                    <td align="center">
+                                        <a href="https://wa.me/5511915187330" target="_blank" style="display:inline-block; padding:12px 30px; background-color:#2D57E7; color:#ffffff; text-decoration:none; font-weight:600; font-size:15px; border-radius:4px; text-align:center;">
+                                            Tirar Dúvidas pelo WhatsApp
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin:0; text-align:center; color:#4b5563;">
+                                Um abraço,<br>
+                                Equipe Ligue Medicina &amp; Grupo Cuidarte
+                            </p>
+                            
+                        </td>
+                    </tr>
+                </table>
             </td>
         </tr>
     </table>
