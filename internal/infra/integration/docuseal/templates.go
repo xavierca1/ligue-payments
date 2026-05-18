@@ -12,11 +12,11 @@ type TemplateConfig struct {
 // Templates é o mapa de todos os templates disponíveis no DocuSeal
 // Todos compartilham os mesmos fields
 var Templates = map[string]TemplateConfig{
-	"ligue_saude_em_dia":  {ID: 3346712, Name: "Ligue Saúde em Dia", Role: "Proponente"},
-	"ligue_mais_cuidado":  {ID: 3346739, Name: "Ligue Mais Cuidado", Role: "Proponente"},
-	"ligue_vida_plena":    {ID: 3624336, Name: "Ligue Vida Plena", Role: "Cliente"},
-	"ligue_cuidado_total": {ID: 3346755, Name: "Ligue Cuidado Total", Role: "Proponente"},
-	"ligue_viver_bem":     {ID: 3346717, Name: "Ligue Viver Bem", Role: "Proponente"},
+	"ligue_saude_em_dia":  {ID: 3741465, Name: "Ligue Saúde em Dia", Role: "Cliente"},
+	"ligue_mais_cuidado":  {ID: 3741614, Name: "Ligue Mais Cuidado", Role: "Cliente"},
+	"ligue_vida_plena":    {ID: 3741405, Name: "Ligue Vida Plena", Role: "Cliente"},
+	"ligue_cuidado_total": {ID: 3741671, Name: "Ligue Cuidado Total", Role: "Cliente"},
+	"ligue_viver_bem":     {ID: 3741539, Name: "Ligue Viver Bem", Role: "Cliente"},
 }
 
 // PlanToTemplateMap mapeia nomes de plano para templates DocuSeal
