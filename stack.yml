@@ -1,19 +1,17 @@
 version: '3.8'
 
 # Stack principal para Docker Swarm (Portainer)
-# Deploy: docker stack deploy -c stack.yml ligue
+# Build direto na KVM:
+#   docker build -t ligue-payments:latest .
+#   docker build -f Dockerfile.rabbitmq -t ligue-rabbitmq:latest .
+# Deploy:
+#   docker stack deploy -c stack.yml ligue --resolve-image never
 #
-# PRÉ-REQUISITO: imagem já publicada em um registry
-# Build local + push:
-#   docker build -t SEU_REGISTRY/ligue-payments:latest .
-#   docker push SEU_REGISTRY/ligue-payments:latest
-#
-# Variáveis de ambiente devem ser configuradas no Portainer
-# (Stacks > Env vars) ou em um arquivo .env no servidor
+# Variáveis: configurar no Portainer (Stacks > Env vars) ou .env no servidor
 
 services:
   api:
-    image: ${REGISTRY_IMAGE:-SEU_REGISTRY/ligue-payments:latest}
+    image: ligue-payments:latest
     environment:
       - RUNNING_IN_DOCKER=true
       - PORT=8080
@@ -63,7 +61,7 @@ services:
         - traefik.http.services.ligue-api.loadbalancer.server.port=8080
 
   rabbitmq:
-    image: ${RABBITMQ_IMAGE:-SEU_REGISTRY/ligue-rabbitmq:latest}
+    image: ligue-rabbitmq:latest
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
