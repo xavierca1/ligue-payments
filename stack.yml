@@ -1,0 +1,116 @@
+version: '3.8'
+
+# Stack principal para Docker Swarm (Portainer)
+# Deploy: docker stack deploy -c stack.yml ligue
+#
+# PRÉ-REQUISITO: imagem já publicada em um registry
+# Build local + push:
+#   docker build -t SEU_REGISTRY/ligue-payments:latest .
+#   docker push SEU_REGISTRY/ligue-payments:latest
+#
+# Variáveis de ambiente devem ser configuradas no Portainer
+# (Stacks > Env vars) ou em um arquivo .env no servidor
+
+services:
+  api:
+    image: ${REGISTRY_IMAGE:-SEU_REGISTRY/ligue-payments:latest}
+    environment:
+      - RUNNING_IN_DOCKER=true
+      - PORT=8080
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_PASS=${RABBITMQ_PASS:-guest}
+      - ASAAS_API_KEY=${ASAAS_API_KEY}
+      - ASAAS_URL=https://api.asaas.com/v3
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USER=${MAIL_USER}
+      - MAIL_PASS=${MAIL_PASS}
+      - MAIL_FROM=${MAIL_FROM}
+      - DD_AGENT_HOST=datadog-agent
+      - DD_DOGSTATSD_PORT=8125
+      - DD_TRACE_AGENT_URL=http://datadog-agent:8126
+      - DD_SERVICE=ligue-payments
+      - DD_ENV=${DD_ENV:-production}
+    networks:
+      - traefik-public
+      - ligue-internal
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      labels:
+        - traefik.enable=true
+        # Rota HTTPS principal
+        - traefik.http.routers.ligue-api.rule=Host(`${API_DOMAIN}`)
+        - traefik.http.routers.ligue-api.entrypoints=websecure
+        - traefik.http.routers.ligue-api.tls=true
+        - traefik.http.routers.ligue-api.tls.certresolver=le
+        - traefik.http.services.ligue-api.loadbalancer.server.port=8080
+
+  rabbitmq:
+    image: ${RABBITMQ_IMAGE:-SEU_REGISTRY/ligue-rabbitmq:latest}
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER:-guest}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASS:-guest}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ligue-internal
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+
+  datadog-agent:
+    image: gcr.io/datadoghq/agent:7
+    environment:
+      - DD_API_KEY=${DD_API_KEY}
+      - DD_SITE=us5.datadoghq.com
+      - DD_HOSTNAME=${DD_HOSTNAME:-ligue-swarm}
+      - DD_APM_ENABLED=true
+      - DD_APM_NON_LOCAL_TRAFFIC=true
+      - DD_DOGSTATSD_NON_LOCAL_TRAFFIC=true
+      - DD_SYSTEM_PROBE_ENABLED=false
+      - DD_PROCESS_AGENT_ENABLED=false
+      - DD_CWS_ENABLED=false
+      - DD_CSPM_ENABLED=false
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /proc/:/host/proc/:ro
+      - /sys/fs/cgroup/:/host/sys/fs/cgroup:ro
+    networks:
+      - ligue-internal
+    deploy:
+      mode: global
+      restart_policy:
+        condition: on-failure
+
+networks:
+  traefik-public:
+    external: true
+  ligue-internal:
+    driver: overlay
+
+volumes:
+  rabbitmq_data:
