@@ -80,7 +80,7 @@ services:
       labels:
         - traefik.enable=true
         # Rota HTTPS principal
-        - traefik.http.routers.ligue-api.rule=Host(`${API_DOMAIN}`)
+        - traefik.http.routers.ligue-api.rule=Host(`api-ligue-payments.cuidai.xyz`)
         - traefik.http.routers.ligue-api.entrypoints=websecure
         - traefik.http.routers.ligue-api.tls=true
         - traefik.http.routers.ligue-api.tls.certresolver=le
