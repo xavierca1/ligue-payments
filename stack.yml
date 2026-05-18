@@ -83,7 +83,7 @@ services:
         - traefik.http.routers.ligue-api.rule=Host(`api-ligue-payments.cuidai.xyz`)
         - traefik.http.routers.ligue-api.entrypoints=websecure
         - traefik.http.routers.ligue-api.tls=true
-        - traefik.http.routers.ligue-api.tls.certresolver=le
+        - traefik.http.routers.ligue-api.tls.certresolver=letsencryptresolver
         - traefik.http.services.ligue-api.loadbalancer.server.port=8080
 
   rabbitmq:
