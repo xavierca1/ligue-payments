@@ -96,6 +96,13 @@ func NewGenerateContractWithDocuSealUseCase(
 
 // Execute gera o contrato e prepara para assinatura digital
 func (uc *GenerateContractWithDocuSealUseCase) Execute(ctx context.Context, input DocuSealContractInput) (*DocuSealContractOutput, error) {
+	// DEBUG: Logs dos campos principais
+	log.Printf("🔍 [DOCUSEAL DEBUG] Campos Recebidos:")
+	log.Printf("   Valor: %q (vazio=%v)", input.Valor, input.Valor == "")
+	log.Printf("   Produto: %q", input.Produto)
+	log.Printf("   Pagamento: %q", input.Pagamento)
+	log.Printf("   Periodicidade: %q", input.Periodicidade)
+
 	// DEBUG: Logs dos campos de endereço
 	log.Printf("🔍 [DOCUSEAL DEBUG] Campos de Endereço Recebidos:")
 	log.Printf("   Endereco: %q (vazio=%v)", input.Endereco, input.Endereco == "")
@@ -126,8 +133,9 @@ func (uc *GenerateContractWithDocuSealUseCase) Execute(ctx context.Context, inpu
 	fieldValues := map[string]string{
 		"product":        input.Produto,
 		"id":             input.CustomerID,
-		"payment_method": input.Pagamento,
-		"monthly":        input.Periodicidade,
+		"method_payment": "Método de Pagamento: " + input.Pagamento,
+		"monthly":        "Mensal",
+		"value":          "Valor: " + formatCurrencyForDocuSeal(input.Valor),
 		"name":           input.Nome,
 		"birthdate":      input.Nascimento,
 		"cpf":            input.CPF,
@@ -142,6 +150,13 @@ func (uc *GenerateContractWithDocuSealUseCase) Execute(ctx context.Context, inpu
 		"UF":             input.UF,
 		"zip_code":       input.CEP,
 	}
+
+	// DEBUG: Log all field values before normalization
+	log.Printf("🔍 [DOCUSEAL DEBUG] Field Values After Formatting:")
+	for key, value := range fieldValues {
+		log.Printf("   %s: %q", key, value)
+	}
+
 	fieldValues = normalizeDocuSealMonthly(fieldValues)
 
 	submissionReq := &docuseal.CreateSubmissionRequest{
@@ -151,7 +166,7 @@ func (uc *GenerateContractWithDocuSealUseCase) Execute(ctx context.Context, inpu
 			{
 				Email:     input.Email,
 				FullName:  input.Nome,
-				Role:      "Proponente",
+				Role:      docuseal.GetTemplateRole(templateName),
 				Completed: true,
 				Values:    fieldValues,
 			},
@@ -238,8 +253,9 @@ func (uc *GenerateContractWithDocuSealUseCase) ExecuteAutomatic(ctx context.Cont
 	fieldValues := map[string]string{
 		"product":        input.Produto,
 		"id":             input.CustomerID,
-		"method_payment": input.Pagamento,
-		"periodicidade":  input.Periodicidade,
+		"method_payment": "Método de Pagamento: " + input.Pagamento,
+		"monthly":        "Mensal",
+		"value":          "Valor: " + formatCurrencyForDocuSeal(input.Valor),
 		"name":           input.Nome,
 		"birthdate":      input.Nascimento,
 		"cpf":            input.CPF,
@@ -263,7 +279,7 @@ func (uc *GenerateContractWithDocuSealUseCase) ExecuteAutomatic(ctx context.Cont
 			{
 				Email:     input.Email,
 				FullName:  input.Nome,
-				Role:      "Proponente",
+				Role:      docuseal.GetTemplateRole(templateName),
 				Completed: true,
 				Values:    fieldValues,
 			},
@@ -295,4 +311,33 @@ func normalizeDocuSealMonthly(values map[string]string) map[string]string {
 		normalized[key] = trimmed
 	}
 	return normalized
+}
+
+// formatCurrencyForDocuSeal converte um valor numérico para formato de moeda brasileira
+// Ex: "99.90" -> "R$ 99,90" ou "99,90" -> "R$ 99,90"
+// Se já estiver em formato "R$ XX,XX", retorna como está
+func formatCurrencyForDocuSeal(valor string) string {
+	log.Printf("  DEBUG formatCurrencyForDocuSeal: input=%q", valor)
+
+	if valor == "" {
+		log.Printf("  DEBUG formatCurrencyForDocuSeal: returning empty (empty input)")
+		return ""
+	}
+
+	// Remove espaços
+	valor = strings.TrimSpace(valor)
+
+	// Se já começa com R$, retorna como está
+	if strings.HasPrefix(valor, "R$") {
+		log.Printf("  DEBUG formatCurrencyForDocuSeal: already formatted, returning=%q", valor)
+		return valor
+	}
+
+	// Substitui ponto por vírgula (conversão de formato)
+	valor = strings.ReplaceAll(valor, ".", ",")
+
+	// Adiciona R$ no início
+	result := fmt.Sprintf("R$ %s", valor)
+	log.Printf("  DEBUG formatCurrencyForDocuSeal: formatted result=%q", result)
+	return result
 }

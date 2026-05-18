@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -152,7 +154,7 @@ func (h *CustomerHandler) LookupCPFHandler(w http.ResponseWriter, r *http.Reques
 
 	customer, err := h.CustomerRepo.FindByCPF(r.Context(), cpf)
 	if err != nil {
-		if strings.EqualFold(err.Error(), "sql: no rows in result set") {
+		if errors.Is(err, sql.ErrNoRows) || strings.EqualFold(err.Error(), "sql: no rows in result set") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(map[string]any{

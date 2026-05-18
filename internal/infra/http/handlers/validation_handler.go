@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/xavierca1/ligue-payments/internal/entity"
 )
@@ -51,4 +54,45 @@ func (h *ValidationHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (h *ValidationHandler) LookupEmailHandler(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Email     string `json:"email"`
+		ProductID string `json:"product_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "INVALID_JSON", "JSON inválido")
+		return
+	}
+
+	email := strings.TrimSpace(input.Email)
+	productID := strings.TrimSpace(input.ProductID)
+	if email == "" {
+		writeErrorResponse(w, http.StatusBadRequest, "MISSING_EMAIL", "E-mail é obrigatório")
+		return
+	}
+
+	customer, err := h.Repo.FindByEmailAndProductID(r.Context(), email, productID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "sql: no rows") {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{
+				"exists": false,
+				"status": "NOT_FOUND",
+			})
+			return
+		}
+		writeErrorResponse(w, http.StatusInternalServerError, "DATABASE_ERROR", "Erro ao consultar e-mail")
+		return
+	}
+
+	status := strings.ToUpper(strings.TrimSpace(customer.Status))
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"exists":      true,
+		"status":      status,
+		"customer_id": customer.ID,
+	})
 }

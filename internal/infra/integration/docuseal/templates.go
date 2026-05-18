@@ -6,16 +6,17 @@ import "strings"
 type TemplateConfig struct {
 	ID   int
 	Name string
+	Role string // Role do signatário conforme definido no template DocuSeal
 }
 
 // Templates é o mapa de todos os templates disponíveis no DocuSeal
 // Todos compartilham os mesmos fields
 var Templates = map[string]TemplateConfig{
-	"ligue_saude_em_dia":  {ID: 3346712, Name: "Ligue Saúde em Dia"},
-	"ligue_mais_cuidado":  {ID: 3346739, Name: "Ligue Mais Cuidado"},
-	"ligue_vida_plena":    {ID: 3624336, Name: "Ligue Vida Plena"},
-	"ligue_cuidado_total": {ID: 3346755, Name: "Ligue Cuidado Total"},
-	"ligue_viver_bem":     {ID: 3346717, Name: "Ligue Viver Bem"},
+	"ligue_saude_em_dia":  {ID: 3346712, Name: "Ligue Saúde em Dia", Role: "Proponente"},
+	"ligue_mais_cuidado":  {ID: 3346739, Name: "Ligue Mais Cuidado", Role: "Proponente"},
+	"ligue_vida_plena":    {ID: 3624336, Name: "Ligue Vida Plena", Role: "Cliente"},
+	"ligue_cuidado_total": {ID: 3346755, Name: "Ligue Cuidado Total", Role: "Proponente"},
+	"ligue_viver_bem":     {ID: 3346717, Name: "Ligue Viver Bem", Role: "Proponente"},
 }
 
 // PlanToTemplateMap mapeia nomes de plano para templates DocuSeal
@@ -40,6 +41,7 @@ var DocuSealFields = []string{
 	"id",
 	"method_payment",
 	"periodicidade",
+	"value",
 	"name",
 	"birthdate",
 	"cpf",
@@ -67,6 +69,15 @@ func GetTemplateID(templateName string) (int, bool) {
 func IsValidTemplate(templateName string) bool {
 	_, exists := Templates[templateName]
 	return exists
+}
+
+// GetTemplateRole retorna o role do signatário para o template especificado.
+// Default "Proponente" quando o template não é encontrado.
+func GetTemplateRole(templateName string) string {
+	if config, exists := Templates[templateName]; exists && config.Role != "" {
+		return config.Role
+	}
+	return "Proponente"
 }
 
 // GetTemplateFromPlanName mapeia um nome de plano para o template DocuSeal correspondente

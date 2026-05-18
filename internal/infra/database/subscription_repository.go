@@ -130,20 +130,21 @@ func (r *SubscriptionRepository) DeleteByID(ctx context.Context, id string) erro
 
 func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, customerID string) (*entity.Subscription, error) {
 	query := `
-		SELECT 
-			id, 
-			customer_id, 
-			plan_id,      -- 👈 O culpado! Tem que estar aqui
-			product_id,   -- Importante também
-			amount, 
-			status, 
-			next_billing_date, 
-			created_at, 
+		SELECT
+			id,
+			customer_id,
+			plan_id,
+			product_id,
+			amount,
+			status,
+			next_billing_date,
+			created_at,
 			updated_at,
-			COALESCE(payment_method_id, '')
-		FROM subscriptions 
-		WHERE customer_id = $1 
-		ORDER BY created_at DESC 
+			COALESCE(payment_method_id, ''),
+			COALESCE(payment_method, '')
+		FROM subscriptions
+		WHERE customer_id = $1
+		ORDER BY created_at DESC
 		LIMIT 1
 	`
 
@@ -152,7 +153,7 @@ func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, custo
 	err := r.DB.QueryRowContext(ctx, query, customerID).Scan(
 		&sub.ID,
 		&sub.CustomerID,
-		&sub.PlanID, // 👈 E tem que ter o ponteiro aqui
+		&sub.PlanID,
 		&sub.ProductID,
 		&sub.Amount,
 		&sub.Status,
@@ -160,6 +161,7 @@ func (r *SubscriptionRepository) FindLastByCustomerID(ctx context.Context, custo
 		&sub.CreatedAt,
 		&sub.UpdatedAt,
 		&sub.PaymentMethodID,
+		&sub.PaymentMethod,
 	)
 
 	if err != nil {

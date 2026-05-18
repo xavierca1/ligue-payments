@@ -17,10 +17,9 @@ func NewPlanRepository(db *sql.DB) *PlanRepository {
 
 func (r *PlanRepository) FindByID(ctx context.Context, id string) (*entity.Plan, error) {
 
-	query := `SELECT id, name, price_cents, provider, product_id FROM plans WHERE id = $1`
+	query := `SELECT id, name, price_cents, provider, product_id, COALESCE(provider_plan_code, '') FROM plans WHERE id = $1`
 
 	var plan entity.Plan
-
 
 	err := r.DB.QueryRowContext(ctx, query, id).Scan(
 		&plan.ID,
@@ -28,6 +27,7 @@ func (r *PlanRepository) FindByID(ctx context.Context, id string) (*entity.Plan,
 		&plan.PriceCents,
 		&plan.Provider,
 		&plan.ProductID,
+		&plan.ProviderPlanCode,
 	)
 
 	if err != nil {

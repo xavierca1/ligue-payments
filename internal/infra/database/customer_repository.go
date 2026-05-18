@@ -21,9 +21,10 @@ func NewCustomerRepository(db *sql.DB) *CustomerRepository {
 func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.Customer, error) {
 	query := `
 		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0),
-		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(marital_status, ''),
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''),
 		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
-		FROM customers 
+		FROM customers
 		WHERE id = $1
 	`
 
@@ -38,6 +39,7 @@ func (r *CustomerRepository) FindByID(ctx context.Context, id string) (*entity.C
 		&c.Phone,
 		&c.BirthDate,
 		&c.Gender,
+		&c.MaritalStatus,
 		&c.Address.Street,
 		&c.Address.Number,
 		&c.Address.Complement,
@@ -62,9 +64,10 @@ func (r *CustomerRepository) FindByCPF(ctx context.Context, cpf string) (*entity
 	cleanCPF := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(cpf, ".", ""), "-", ""), " ", "")
 
 	query := `
-		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0), 
+		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0),
+		       COALESCE(marital_status, ''),
 		       COALESCE(gateway_id, ''), COALESCE(subscription_id, ''), COALESCE(status, ''),
-		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''),
 		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
 		FROM customers
 		WHERE cpf_cnpj = $1
@@ -82,6 +85,7 @@ func (r *CustomerRepository) FindByCPF(ctx context.Context, cpf string) (*entity
 		&c.Phone,
 		&c.BirthDate,
 		&c.Gender,
+		&c.MaritalStatus,
 		&c.GatewayID,
 		&c.SubscriptionID,
 		&c.Status,
@@ -103,9 +107,10 @@ func (r *CustomerRepository) FindByCPF(ctx context.Context, cpf string) (*entity
 
 func (r *CustomerRepository) FindByEmailAndProductID(ctx context.Context, email, productID string) (*entity.Customer, error) {
 	query := `
-		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0), 
+		SELECT id, name, email, cpf_cnpj, COALESCE(phone, ''), COALESCE(birth_date, ''), COALESCE(gender, 0),
+		       COALESCE(marital_status, ''),
 		       COALESCE(gateway_id, ''), COALESCE(subscription_id, ''), COALESCE(status, ''),
-		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''), 
+		       COALESCE(street, ''), COALESCE(number, ''), COALESCE(complement, ''),
 		       COALESCE(district, ''), COALESCE(city, ''), COALESCE(state, ''), COALESCE(zip_code, '')
 		FROM customers
 		WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
@@ -124,6 +129,7 @@ func (r *CustomerRepository) FindByEmailAndProductID(ctx context.Context, email,
 		&c.Phone,
 		&c.BirthDate,
 		&c.Gender,
+		&c.MaritalStatus,
 		&c.GatewayID,
 		&c.SubscriptionID,
 		&c.Status,
@@ -198,14 +204,14 @@ func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) err
 	query := `
         INSERT INTO customers (
             id, product_id, plan_id, name, email, cpf_cnpj, phone, birth_date,
-            gender, gateway_id, subscription_id, status, street, number, complement,
+            gender, marital_status, gateway_id, subscription_id, status, street, number, complement,
             district, city, state, zip_code, created_at, updated_at, terms_accepted,
             terms_accepted_at, terms_version
         )
         VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 
-            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
-            $21, $22, $23, $24
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+            $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+            $21, $22, $23, $24, $25
         )
     `
 
@@ -219,21 +225,22 @@ func (r *CustomerRepository) Create(ctx context.Context, c *entity.Customer) err
 		c.Phone,                  // $7
 		c.BirthDate,              // $8
 		c.Gender,                 // $9
-		toNull(c.GatewayID),      // $10
-		toNull(c.SubscriptionID), // $11
-		c.Status,                 // $12
-		c.Address.Street,         // $13
-		c.Address.Number,         // $14
-		c.Address.Complement,     // $15
-		c.Address.District,       // $16
-		c.Address.City,           // $17
-		c.Address.State,          // $18
-		c.Address.ZipCode,        // $19
-		c.CreatedAt,              // $20
-		c.UpdatedAt,              // $21
-		c.TermsAccepted,          // $22
-		c.TermsAcceptedAt,        // $23
-		c.TermsVersion,           // $24
+		c.MaritalStatus,          // $10
+		toNull(c.GatewayID),      // $11
+		toNull(c.SubscriptionID), // $12
+		c.Status,                 // $13
+		c.Address.Street,         // $14
+		c.Address.Number,         // $15
+		c.Address.Complement,     // $16
+		c.Address.District,       // $17
+		c.Address.City,           // $18
+		c.Address.State,          // $19
+		c.Address.ZipCode,        // $20
+		c.CreatedAt,              // $21
+		c.UpdatedAt,              // $22
+		c.TermsAccepted,          // $23
+		c.TermsAcceptedAt,        // $24
+		c.TermsVersion,           // $25
 	)
 
 	if err != nil {

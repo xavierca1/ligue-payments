@@ -13,6 +13,7 @@ create table public.customers (
   gateway_id character varying(100) null,
   birth_date text null,
   gender bigint null,
+  marital_status character varying(50) null,
   subscription_id character varying(50) null,
   status character varying(20) null,
   street character varying(255) null,

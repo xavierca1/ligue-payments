@@ -148,8 +148,10 @@ func main() {
 		log.Println("⚠️ Storage de contratos não configurado; PDFs serão enviados apenas por email")
 	}
 
-	// Dica de segurança: considere mover esse token para o .env no futuro ;)
-	docClient := doc24.NewClient("liguemed", "J3xpZW50U2VjjkV0RG9jMjRNiOJlNDM=")
+	docClient := doc24.NewClient(
+		strings.TrimSpace(os.Getenv("DOC24_CLIENT_ID")),
+		strings.TrimSpace(os.Getenv("DOC24_CLIENT_SECRET")),
+	)
 
 	// DocuSeal client (opcional - usa variáveis de ambiente DOCUSEAL_API_URL e DOCUSEAL_API_KEY)
 	docuSealClient := docuseal.NewClient(strings.TrimSpace(os.Getenv("DOCUSEAL_API_URL")), strings.TrimSpace(os.Getenv("DOCUSEAL_API_KEY")))
@@ -213,6 +215,7 @@ func main() {
 	// Rotas da API
 	r.Post("/checkout", customerHandler.CreateCheckoutHandler)
 	r.Post("/customers/lookup-cpf", customerHandler.LookupCPFHandler)
+	r.Post("/customers/lookup-email", validationHandler.LookupEmailHandler)
 	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler)
 	r.Post("/customers/status", customerHandler.PostStatusHandler)
 	r.Post("/webhook", webhookHandler.Handle)

@@ -10,21 +10,31 @@ import (
 	"github.com/xavierca1/ligue-payments/internal/infra/http/middleware"
 )
 
+type DependentPayload struct {
+	Name      string `json:"name"`
+	CPF       string `json:"cpf"`
+	BirthDate string `json:"birth_date"`
+	Gender    int    `json:"gender"` // 1=Masculino, 2=Feminino, 3=Outro
+	Kinship   string `json:"kinship"`
+}
+
 type ActivationPayload struct {
 	CustomerID string `json:"customer_id"`
 	PlanID     string `json:"plan_id"`
 
 	ProviderPlanCode string `json:"provider_plan_code"`
 
-	Provider string `json:"provider"` // <--- Adicione
-	Origin   string `json:"origin"`   // <--- Adicione
+	Provider string `json:"provider"`
+	Origin   string `json:"origin"`
 
 	Name      string `json:"name"`
 	Email     string `json:"email"`
 	CPF       string `json:"cpf"`
 	Phone     string `json:"phone"`
-	BirthDate string `json:"birth_date"` // <--- Importante para Doc24
-	Gender    string `json:"gender"`     // <--- Importante para Doc24
+	BirthDate string `json:"birth_date"`
+	Gender    string `json:"gender"`
+
+	Dependents []DependentPayload `json:"dependents,omitempty"`
 }
 
 type QueueProducerInterface interface {

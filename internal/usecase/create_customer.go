@@ -79,6 +79,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 	discountPercent := 0
 	discountAmountCents := 0
 	couponCode := strings.ToUpper(strings.TrimSpace(input.CouponCode))
+	couponSellerName := ""
 
 	if couponCode != "" {
 		if couponTracker == nil {
@@ -99,6 +100,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		if discountPercent <= 0 {
 			discountPercent = 10
 		}
+		couponSellerName = couponDetails.SellerName
 
 		discountAmountCents = (originalAmountCents * discountPercent) / 100
 		finalAmountCents = originalAmountCents - discountAmountCents
@@ -134,6 +136,19 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 
 		if existingStatus == "" {
 			existingStatus = "PENDING"
+		}
+
+		if existingStatus == "ACTIVE" {
+			cpfClean := strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(input.CPF, ".", ""), "-", ""), " ", "")
+			cpfMasked := "***"
+			if len(cpfClean) >= 4 {
+				cpfMasked = strings.Repeat("*", len(cpfClean)-4) + cpfClean[len(cpfClean)-4:]
+			}
+			log.Printf("[checkout] blocked: customer already active cpf=%s email=%s", cpfMasked, input.Email)
+			return nil, &DomainError{
+				Code:    "CUSTOMER_ALREADY_ACTIVE",
+				Message: "Já existe uma assinatura ativa para este CPF. Em caso de dúvidas, entre em contato com o SAC.",
+			}
 		}
 
 		if existingStatus == "PENDING" {
@@ -175,14 +190,15 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		}
 
 		existingCustomer = &entity.Customer{
-			ID:        uuid.New().String(),
-			Name:      input.Name,
-			Email:     input.Email,
-			CPF:       input.CPF,
-			Phone:     input.Phone,
-			BirthDate: input.BirthDate,
-			Gender:    genderInt,
-			Status:    "PENDING",
+			ID:            uuid.New().String(),
+			Name:          input.Name,
+			Email:         input.Email,
+			CPF:           input.CPF,
+			Phone:         input.Phone,
+			BirthDate:     input.BirthDate,
+			Gender:        genderInt,
+			MaritalStatus: input.MaritalStatus,
+			Status:        "PENDING",
 			ProductID: plan.ProductID,
 			PlanID:    plan.ID,
 			Address: entity.Address{
@@ -311,6 +327,7 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 		Status:          gatewayStatus,
 		PaymentMethod:   paymentMethod,
 		PaymentMethodID: gatewaySubscriptionID,
+		NextBillingDate: time.Now().AddDate(0, 1, 0),
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
 	}
@@ -323,6 +340,22 @@ func (uc *CreateCustomerUseCase) Execute(ctx context.Context, input CreateCustom
 			}
 		}
 		return nil, &TechnicalError{Code: "DATABASE_ERROR", Message: "Falha ao criar assinatura"}
+	}
+
+	if couponCode != "" && couponTracker != nil {
+		if trackErr := couponTracker.TrackSale(ctx, CouponSaleRecord{
+			CouponCode:          couponCode,
+			SellerName:          couponSellerName,
+			CustomerID:          existingCustomer.ID,
+			SubscriptionID:      newSubscription.ID,
+			PlanID:              plan.ID,
+			OriginalAmountCents: originalAmountCents,
+			DiscountPercent:     discountPercent,
+			DiscountAmountCents: discountAmountCents,
+			FinalAmountCents:    finalAmountCents,
+		}); trackErr != nil {
+			log.Printf("[WARN] falha ao registrar venda do cupom %s: %v", couponCode, trackErr)
+		}
 	}
 
 	if paymentMethod == "PIX" {

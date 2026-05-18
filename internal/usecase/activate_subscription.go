@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -41,10 +40,6 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 	if err != nil {
 		return fmt.Errorf("falha ao buscar dados do cliente: %w", err)
 	}
-
-	// DEBUG: Exibir objeto customer completo em JSON
-	customerJSON, _ := json.MarshalIndent(customer, "", "  ")
-	log.Printf("\n🔍 [CUSTOMER DEBUG - OBJETO COMPLETO]:\n%s\n", string(customerJSON))
 
 	var dependents []*entity.Dependent
 	if uc.DependentRepo != nil {
@@ -121,6 +116,19 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 		Gender:           genderStr,
 	}
 
+	for _, dep := range dependents {
+		if dep == nil {
+			continue
+		}
+		payload.Dependents = append(payload.Dependents, queue.DependentPayload{
+			Name:      dep.Name,
+			CPF:       dep.CPF,
+			BirthDate: dep.BirthDate,
+			Gender:    dep.Gender,
+			Kinship:   dep.Kinship,
+		})
+	}
+
 	if uc.Queue != nil {
 		if err := uc.Queue.PublishActivation(ctx, payload); err != nil {
 			log.Printf("⚠️ Assinatura ativada no banco, mas falha ao publicar na fila: %v", err)
@@ -145,12 +153,12 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, input Activa
 			CPF:           customer.CPF,
 			PlanName:      plan.Name,
 			Produto:       plan.Name,
-			Valor:         fmt.Sprintf("%.2f", float64(sub.Amount)/100), // De centavos para reais
-			Pagamento:     sub.PaymentMethod,                            // PIX ou CREDIT_CARD
-			Periodicidade: "Mensal",                                     // Sempre mensal por padrão
+			Valor:         formatBRL(sub.Amount),
+			Pagamento:     humanizePaymentMethod(sub.PaymentMethod),
+			Periodicidade: "Mensal",
 			Nascimento:    customer.BirthDate,
-			Sexo:          genderStr, // Convertido de int
-			Civil:         "",        // Pode extrair do customer se tiver
+			Sexo:          genderStr,
+			Civil:         customer.MaritalStatus,
 			Celular:       customer.Phone,
 			Endereco:      customer.Address.Street,
 			Numero:        customer.Address.Number,
@@ -246,7 +254,7 @@ func buildContractInput(customer *entity.Customer, plan *entity.Plan) GenerateCo
 		RG:            "",
 		Orgao:         "",
 		Sexo:          sexo,
-		Civil:         "",
+		Civil:         customer.MaritalStatus,
 		Celular:       customer.Phone,
 		Fixo:          "",
 		Email:         customer.Email,
@@ -257,6 +265,25 @@ func buildContractInput(customer *entity.Customer, plan *entity.Plan) GenerateCo
 		Cidade:        customer.Address.City,
 		UF:            customer.Address.State,
 		CEP:           customer.Address.ZipCode,
+	}
+}
+
+func formatBRL(amountCents int) string {
+	reais := amountCents / 100
+	centavos := amountCents % 100
+	return fmt.Sprintf("R$ %d,%02d", reais, centavos)
+}
+
+func humanizePaymentMethod(method string) string {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case "CREDIT_CARD":
+		return "Cartão de Crédito"
+	case "PIX":
+		return "PIX"
+	case "BOLETO":
+		return "Boleto"
+	default:
+		return method
 	}
 }
 

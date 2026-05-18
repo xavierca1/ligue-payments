@@ -24,11 +24,12 @@ type Customer struct {
 	Email string `json:"email"`
 	CPF   string `json:"cpf"`
 
-	Phone     string  `json:"phone"`
-	BirthDate string  `json:"birth_date"`
-	Gender    int     `json:"gender"`
-	Address   Address `json:"address"`
-	PlanID    string  `json:"plan_id"`
+	Phone         string  `json:"phone"`
+	BirthDate     string  `json:"birth_date"`
+	Gender        int     `json:"gender"`
+	MaritalStatus string  `json:"marital_status"`
+	Address       Address `json:"address"`
+	PlanID        string  `json:"plan_id"`
 
 	ProductID string `json:"product_id"`
 
@@ -88,6 +89,7 @@ type CustomerRepositoryInterface interface {
 	FindByGatewayID(id string) (*Customer, error)
 	FindByID(ctx context.Context, id string) (*Customer, error)
 	FindByCPF(ctx context.Context, cpf string) (*Customer, error)
+	FindByEmailAndProductID(ctx context.Context, email, productID string) (*Customer, error)
 	CheckDuplicity(ctx context.Context, email, cpf string) (bool, error)
 	Delete(ctx context.Context, id string) error
 	UpdateProviderID(ctx context.Context, customerID, providerID string) error
