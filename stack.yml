@@ -58,7 +58,7 @@ services:
       - DD_SERVICE=ligue-payments
       - DD_ENV=${DD_ENV:-production}
     networks:
-      - traefik-public
+      - cuidai_net
       - ligue-internal
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/healthz"]
@@ -83,7 +83,7 @@ services:
         - traefik.http.routers.ligue-api.rule=Host(`api-ligue-payments.cuidai.xyz`)
         - traefik.http.routers.ligue-api.entrypoints=websecure
         - traefik.http.routers.ligue-api.tls=true
-        - traefik.http.routers.ligue-api.tls.certresolver=letsencrypt
+        - traefik.http.routers.ligue-api.tls.certresolver=letsencryptresolver
         - traefik.http.services.ligue-api.loadbalancer.server.port=8080
 
   rabbitmq:
@@ -131,7 +131,7 @@ services:
         condition: on-failure
 
 networks:
-  traefik-public:
+  cuidai_net:
     external: true
   ligue-internal:
     driver: overlay
