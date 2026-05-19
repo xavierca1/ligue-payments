@@ -7,7 +7,7 @@
   "coupon_code": "",
   "checkout_action": "",
   "birth_date": "1985-03-22",
-  "gender": "F",
+  "gender": "F", 
   "payment_method": "CREDIT_CARD",
   "street": "Avenida Paulista",
   "number": "1000",

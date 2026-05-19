@@ -1,0 +1,63 @@
+name: Deploy to KVM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.KVM_HOST }}
+          username: ${{ secrets.KVM_USER }}
+          key: ${{ secrets.KVM_SSH_KEY }}
+          script: |
+            cd ~/ligue-payments
+            git pull origin main
+
+            docker build -t ligue-payments:latest .
+            docker build -f Dockerfile.rabbitmq -t ligue-rabbitmq:latest .
+
+            export DATABASE_URL='${{ secrets.DATABASE_URL }}'
+            export RABBITMQ_USER='guest'
+            export RABBITMQ_PASS='guest'
+            export ASAAS_API_KEY='${{ secrets.ASAAS_API_KEY }}'
+            export ASAAS_URL='https://asaas.com/api/v3'
+            export ASAAS_WEBHOOK_SECRET='${{ secrets.ASAAS_WEBHOOK_SECRET }}'
+            export ASAAS_WEBHOOK_SKIP_SIGNATURE='false'
+            export ASAAS_WEBHOOK_DEBUG='false'
+            export KOMMO_ACCOUNT_ID='${{ secrets.KOMMO_ACCOUNT_ID }}'
+            export KOMMO_API_TOKEN='${{ secrets.KOMMO_API_TOKEN }}'
+            export KOMMO_PIPELINE_B2C_ID='${{ secrets.KOMMO_PIPELINE_B2C_ID }}'
+            export KOMMO_FIELD_PRODUTO_ID='${{ secrets.KOMMO_FIELD_PRODUTO_ID }}'
+            export KOMMO_FIELD_ORIGEM_ID='${{ secrets.KOMMO_FIELD_ORIGEM_ID }}'
+            export DOC24_CLIENT_ID='${{ secrets.DOC24_CLIENT_ID }}'
+            export DOC24_CLIENT_SECRET='${{ secrets.DOC24_CLIENT_SECRET }}'
+            export USE_GRAPH_EMAIL='true'
+            export AZURE_CLIENT_ID='${{ secrets.AZURE_CLIENT_ID }}'
+            export AZURE_TENANT_ID='${{ secrets.AZURE_TENANT_ID }}'
+            export AZURE_CLIENT_SECRET='${{ secrets.AZURE_CLIENT_SECRET }}'
+            export MAIL_FROM='no-reply@liguemedicina.com'
+            export SUPABASE_CONTRACTS_PROJECT_URL='${{ secrets.SUPABASE_CONTRACTS_PROJECT_URL }}'
+            export SUPABASE_CONTRACTS_BUCKET='contracts'
+            export SUPABASE_CONTRACTS_SERVICE_ROLE_KEY='${{ secrets.SUPABASE_CONTRACTS_SERVICE_ROLE_KEY }}'
+            export DOCUSEAL_API_URL='https://api.docuseal.com'
+            export DOCUSEAL_API_KEY='${{ secrets.DOCUSEAL_API_KEY }}'
+            export SUPABASE_STORAGE_URL='${{ secrets.SUPABASE_STORAGE_URL }}'
+            export DD_API_KEY='${{ secrets.DD_API_KEY }}'
+            export DD_ENV='production'
+
+            docker stack deploy -c stack.yml ligue --resolve-image never
+
+      - name: Verificar saúde do serviço
+        run: |
+          sleep 20
+          curl --fail https://api-ligue-payments.cuidai.xyz/healthz || exit 1
