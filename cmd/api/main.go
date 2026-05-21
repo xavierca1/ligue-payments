@@ -218,7 +218,7 @@ func main() {
 	r.Post("/customers/lookup-email", validationHandler.LookupEmailHandler)
 	r.Get("/customers/{id}/status", customerHandler.GetStatusHandler)
 	r.Post("/customers/status", customerHandler.PostStatusHandler)
-	r.Post("/webhook", webhookHandler.Handle)
+	r.Post("/asaas/webhook", webhookHandler.Handle)
 	r.Post("/docuseal/webhook", docusealWebhookHandler.Handle)
 	r.Post("/docuseal/test", docusealTestHandler.Handle)
 	r.Post("/docuseal/status", docusealStatusHandler.Handle)
