@@ -855,6 +855,7 @@
                                 Finalizar Pedido
                                 <div class="micro-copy-no-commitment">Sem fidelidade. Cancele quando quiser.</div>
                             </button>
+                            <div id="cardPaymentError" class="alert alert-danger d-none mt-3 rounded-3 small" role="alert" style="border-left:4px solid #dc3545;"></div>
                         </div>
 
                         <!-- PIX -->
@@ -2061,6 +2062,34 @@ em conta bancária.
             step2ValidationFeedback.classList.remove('d-none');
         }
 
+        function showCardError(msg) {
+            var el = document.getElementById('cardPaymentError');
+            if (!el) return;
+            el.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>' + msg;
+            el.classList.remove('d-none');
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function clearCardError() {
+            var el = document.getElementById('cardPaymentError');
+            if (el) el.classList.add('d-none');
+        }
+
+        function mapCardErrorMessage(raw) {
+            var s = (raw || '').toLowerCase();
+            if (/recusad|declined|n[aã]o autorizado|operadora/.test(s))
+                return 'Cartão recusado pela operadora. Verifique os dados ou tente com outro cartão.';
+            if (/insuficiente|insufficient|saldo/.test(s))
+                return 'Saldo insuficiente. Tente com outro cartão.';
+            if (/vencid|expir/.test(s))
+                return 'Cartão vencido. Use um cartão com validade em dia.';
+            if (/cvv|ccv|seguran/.test(s))
+                return 'CVV inválido. Verifique o código de segurança do cartão.';
+            if (/n[uú]mero|invalid.*card|inv[aá]lid/.test(s))
+                return 'Dados do cartão inválidos. Verifique e tente novamente.';
+            return 'Pagamento não aprovado. Verifique os dados do cartão ou tente com outro.';
+        }
+
         function ensureInlineErrorNode(inputId) {
             var input = document.getElementById(inputId);
             if (!input) return null;
@@ -2362,14 +2391,16 @@ em conta bancária.
 
         document.getElementById('cardNumber').addEventListener('input', function () {
             this.value = this.value.replace(/\D/g, '').slice(0, 19);
+            clearCardError();
             validateStep3();
         });
-        document.getElementById('cardName').addEventListener('input', function () { this.value = this.value.toUpperCase(); validateStep3(); });
-        document.getElementById('cardCvv').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0,4); validateStep3(); });
+        document.getElementById('cardName').addEventListener('input', function () { this.value = this.value.toUpperCase(); clearCardError(); validateStep3(); });
+        document.getElementById('cardCvv').addEventListener('input', function () { this.value = this.value.replace(/\D/g, '').slice(0,4); clearCardError(); validateStep3(); });
         document.getElementById('cardExpiry').addEventListener('input', function () {
             var v = this.value.replace(/\D/g, '');
             if (v.length >= 2) v = v.substring(0, 2) + '/' + v.substring(2, 4);
             this.value = v;
+            clearCardError();
             validateStep3();
         });
 
@@ -2478,6 +2509,8 @@ em conta bancária.
                         if (payload.payment_method === 'PIX') {
                             var spinnerE = document.getElementById('pixLoadingSpinner');
                             if (spinnerE) spinnerE.style.display = 'none';
+                        } else {
+                            finalSubmitBtn.innerHTML = 'Finalizar Pedido<div class="micro-copy-no-commitment">Sem fidelidade. Cancele quando quiser.</div>';
                         }
                         showActiveCpfModal(
                             'E-mail já cadastrado',
@@ -2493,7 +2526,9 @@ em conta bancária.
                         var cont = document.getElementById('pixInlineContainer');
                         if (cont) { cont.style.display = 'block'; cont.innerHTML = '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>' + errMsg + '</div>'; }
                     } else {
-                        alert('Erro: ' + errMsg);
+                        showCardError(mapCardErrorMessage(errMsg));
+                        finalSubmitBtn.innerHTML = 'Tentar novamente<div class="micro-copy-no-commitment">Sem fidelidade. Cancele quando quiser.</div>';
+                        finalSubmitBtn.disabled = false;
                     }
                     return;
                 }
@@ -2516,12 +2551,13 @@ em conta bancária.
                     var cont = document.getElementById('pixInlineContainer');
                     if (cont) { cont.style.display = 'block'; cont.innerHTML = '<div class="alert alert-danger">Erro ao processar. Tente novamente.</div>'; }
                 } else {
-                    alert('Erro no servidor.');
+                    showCardError('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.');
+                    finalSubmitBtn.innerHTML = 'Tentar novamente<div class="micro-copy-no-commitment">Sem fidelidade. Cancele quando quiser.</div>';
+                    finalSubmitBtn.disabled = false;
                 }
             })
             .finally(function() {
                 if (paymentMethodInput.value !== 'PIX') {
-                    finalSubmitBtn.innerHTML = 'Finalizar Pedido<div class="micro-copy-no-commitment"></div>';
                     validateStep3();
                 }
             });

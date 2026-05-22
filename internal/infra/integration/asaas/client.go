@@ -218,7 +218,6 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 		body, _ := io.ReadAll(resp.Body)
 		fmt.Printf("❌ ERRO API ASAAS Subscribe (Status %d): %s\n", resp.StatusCode, string(body))
 
-		// Tenta parsear a resposta de erro
 		var errResp struct {
 			Errors []struct {
 				Code        string `json:"code"`
@@ -227,9 +226,17 @@ func (c *Client) Subscribe(input SubscribeInput) (string, string, error) {
 			} `json:"errors"`
 		}
 		if err := json.Unmarshal(body, &errResp); err == nil && len(errResp.Errors) > 0 {
-			fmt.Printf("[asaas] Campos com erro na subscrição:\n")
+			var descriptions []string
 			for _, e := range errResp.Errors {
-				fmt.Printf("  - Field: %q | Code: %q | Description: %q\n", e.Field, e.Code, e.Description)
+				fmt.Printf("[asaas] erro subscrição — field=%q code=%q description=%q\n", e.Field, e.Code, e.Description)
+				if e.Description != "" {
+					descriptions = append(descriptions, e.Description)
+				} else if e.Code != "" {
+					descriptions = append(descriptions, e.Code)
+				}
+			}
+			if len(descriptions) > 0 {
+				return "", "", fmt.Errorf("%s", strings.Join(descriptions, "; "))
 			}
 		}
 
