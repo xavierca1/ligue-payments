@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"fmt"
@@ -61,16 +62,18 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Eventos que ativam a assinatura:
-	// - Qualquer PAYMENT_* com status de pagamento confirmado
-	//   (alguns tenants enviam PAYMENT_UPDATED/PAYMENT_CREATED com status final)
 	eventName := strings.ToUpper(strings.TrimSpace(event.Event))
 	paymentStatus := strings.ToUpper(strings.TrimSpace(event.Payment.Status))
+
+	// Eventos de cobrança de multa/juros não devem reativar assinatura.
+	isNonActivationEvent := eventName == "PAYMENT_FINE_CHARGED" ||
+		eventName == "PAYMENT_INTEREST_CHARGED" ||
+		eventName == "PAYMENT_PENALTY_CHARGED"
 
 	isPaymentEvent := strings.HasPrefix(eventName, "PAYMENT_")
 	isPaidStatus := paymentStatus == "RECEIVED" || paymentStatus == "CONFIRMED" || paymentStatus == "RECEIVED_IN_CASH"
 	isActivationEvent := eventName == "PAYMENT_RECEIVED" || eventName == "PAYMENT_CONFIRMED" || eventName == "PAYMENT_APPROVED"
-	shouldActivate := (isPaymentEvent && isPaidStatus) || isActivationEvent
+	shouldActivate := !isNonActivationEvent && ((isPaymentEvent && isPaidStatus) || isActivationEvent)
 
 	if !shouldActivate {
 		if isPaymentEvent {
@@ -87,8 +90,6 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	customerRef := strings.TrimSpace(event.Payment.Customer)
 	localCustomer, err := h.CustomerRepo.FindByGatewayID(customerRef)
 	if err != nil {
-		// Fallback: se o campo customer parecer um UUID interno (ex: simulação de teste),
-		// tenta buscar pelo ID direto.
 		log.Printf("⚠️ Webhook: FindByGatewayID falhou para %q, tentando FindByID como fallback: %v", customerRef, err)
 		localCustomer, err = h.CustomerRepo.FindByID(r.Context(), customerRef)
 		if err != nil {
@@ -99,21 +100,26 @@ func (h *WebhookHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		log.Printf("✅ Webhook: Customer encontrado via fallback FindByID (%s)", customerRef)
 	}
 
+	// Responde 200 imediatamente para evitar timeout do Asaas.
+	// A ativação é processada em background para não bloquear a resposta.
+	w.WriteHeader(http.StatusOK)
+
 	input := usecase.ActivateSubscriptionInput{
 		CustomerID: localCustomer.ID,
 		GatewayID:  event.Payment.ID,
 	}
+	customerID := localCustomer.ID
+	gatewayID := localCustomer.GatewayID
 
-	if err := h.ActivateSubUC.Execute(r.Context(), input); err != nil {
-		log.Printf("❌ Webhook: Activation error: %v", err)
-		log.Printf("❌ Webhook: Detalhes - CustomerID=%s, GatewayID=%s, PaymentID=%s", localCustomer.ID, localCustomer.GatewayID, event.Payment.ID)
-
-		writeErrorResponse(w, http.StatusInternalServerError, "ACTIVATION_ERROR", "Erro ao ativar assinatura")
-		return
-	}
-
-	log.Printf("✅ Webhook: Subscription activated for customer %s (GatewayID=%s, PaymentID=%s)", localCustomer.ID, localCustomer.GatewayID, event.Payment.ID)
-	w.WriteHeader(http.StatusOK)
+	go func() {
+		ctx := context.Background()
+		if err := h.ActivateSubUC.Execute(ctx, input); err != nil {
+			log.Printf("❌ Webhook: Activation error: %v", err)
+			log.Printf("❌ Webhook: Detalhes - CustomerID=%s, GatewayID=%s, PaymentID=%s", customerID, gatewayID, input.GatewayID)
+			return
+		}
+		log.Printf("✅ Webhook: Subscription activated for customer %s (GatewayID=%s, PaymentID=%s)", customerID, gatewayID, input.GatewayID)
+	}()
 }
 
 func verifyWebhookSignature(body, signature string, r *http.Request) bool {
